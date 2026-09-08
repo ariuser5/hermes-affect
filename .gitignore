@@ -214,5 +214,11 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
+# Hermes Affect runtime state (keep outside the source repository in production)
+.hermes-affect-runtime/
+affect-state/
+*.affect.json
+*.affect.json.lock
+
 # Streamlit
 .streamlit/secrets.toml

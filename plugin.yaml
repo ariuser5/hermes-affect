@@ -1,0 +1,3 @@
+name: hermes-affect
+version: "0.1.0"
+description: Session-scoped affective state for Hermes Agent profiles and conversations
