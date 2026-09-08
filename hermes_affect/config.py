@@ -8,27 +8,18 @@ from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-TRAIT_FIELDS = (
+CORE_TRAIT_FIELDS = (
     "reactivity",
+    "persistence",
     "pride",
-    "patience",
-    "forgiveness",
-    "humor_tolerance",
     "playfulness",
-    "seriousness",
-    "sarcasm",
-    "conflict_avoidance",
+    "assertiveness",
     "social_influence",
-    "leadership_drive",
-    "deference",
+    "receptiveness",
 )
-DYNAMICS_FIELDS = (
-    "emotional_decay",
-    "grudge_persistence",
-    "escalation_gain",
-    "expression_gain",
-)
+TUNING_FIELDS = ("expression_gain", "escalation_gain", "repair_gain")
 
+_TOP_LEVEL_FIELDS = {"schema_version", "traits", "tuning", "sensitivities"}
 _SECTION_RE = re.compile(
     r"(?ms)^\s*session_affect:\s*\n(?P<body>(?:^[ \t]+.*(?:\n|$))*)"
 )
@@ -44,14 +35,14 @@ class Sensitivity:
 class AffectConfig:
     schema_version: int = 1
     traits: Mapping[str, float] = field(default_factory=dict)
-    dynamics: Mapping[str, float] = field(default_factory=dict)
+    tuning: Mapping[str, float] = field(default_factory=dict)
     sensitivities: tuple[Sensitivity, ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "schema_version": self.schema_version,
             "traits": dict(self.traits),
-            "dynamics": dict(self.dynamics),
+            "tuning": dict(self.tuning),
             "sensitivities": [asdict(item) for item in self.sensitivities],
         }
 
@@ -60,13 +51,8 @@ def neutral_config() -> AffectConfig:
     """Return documented neutral predispositions for a missing SOUL section."""
 
     return AffectConfig(
-        traits={name: 0.5 for name in TRAIT_FIELDS},
-        dynamics={
-            "emotional_decay": 0.45,
-            "grudge_persistence": 0.50,
-            "escalation_gain": 1.0,
-            "expression_gain": 1.0,
-        },
+        traits={name: 0.5 for name in CORE_TRAIT_FIELDS},
+        tuning={name: 1.0 for name in TUNING_FIELDS},
     )
 
 
@@ -79,11 +65,25 @@ def _number(value: Any, *, field_name: str, minimum: float, maximum: float) -> f
     return number
 
 
+def _warn_unknown_fields(
+    values: Mapping[str, Any],
+    *,
+    location: str,
+    allowed: set[str],
+    warnings: list[str],
+) -> None:
+    for name in values:
+        if name in allowed:
+            continue
+        warnings.append(f"Unknown field {location}.{name} is ignored.")
+
+
 def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
     """Validate a decoded ``session_affect`` mapping.
 
-    Invalid configuration falls back to the complete neutral configuration so a
-    malformed SOUL.md cannot interrupt a conversation.
+    Unknown fields are never reinterpreted. Recognized fields are still used,
+    while malformed recognized values cause a complete neutral fallback so a
+    bad SOUL.md cannot interrupt a session.
     """
 
     defaults = neutral_config()
@@ -91,30 +91,47 @@ def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
     try:
         if not isinstance(raw, Mapping):
             raise ValueError("session_affect must be a mapping")
-        if raw.get("schema_version", 1) != 1:
+
+        _warn_unknown_fields(
+            raw,
+            location="session_affect",
+            allowed=_TOP_LEVEL_FIELDS,
+            warnings=warnings,
+        )
+        schema_version = raw.get("schema_version", 1)
+        if isinstance(schema_version, bool) or schema_version != 1:
             raise ValueError("unsupported schema_version")
 
         traits_raw = raw.get("traits", {})
-        dynamics_raw = raw.get("dynamics", {})
-        if not isinstance(traits_raw, Mapping) or not isinstance(dynamics_raw, Mapping):
-            raise ValueError("traits and dynamics must be mappings")
+        tuning_raw = raw.get("tuning", {})
+        if not isinstance(traits_raw, Mapping) or not isinstance(tuning_raw, Mapping):
+            raise ValueError("traits and tuning must be mappings")
+
+        _warn_unknown_fields(
+            traits_raw,
+            location="session_affect.traits",
+            allowed=set(CORE_TRAIT_FIELDS),
+            warnings=warnings,
+        )
+        _warn_unknown_fields(
+            tuning_raw,
+            location="session_affect.tuning",
+            allowed=set(TUNING_FIELDS),
+            warnings=warnings,
+        )
 
         traits = dict(defaults.traits)
-        for name in TRAIT_FIELDS:
+        for name in CORE_TRAIT_FIELDS:
             if name in traits_raw:
                 traits[name] = _number(
                     traits_raw[name], field_name=f"traits.{name}", minimum=0.0, maximum=1.0
                 )
 
-        dynamics = dict(defaults.dynamics)
-        for name in DYNAMICS_FIELDS:
-            if name in dynamics_raw:
-                maximum = 3.0 if name in {"escalation_gain", "expression_gain"} else 1.0
-                dynamics[name] = _number(
-                    dynamics_raw[name],
-                    field_name=f"dynamics.{name}",
-                    minimum=0.0,
-                    maximum=maximum,
+        tuning = dict(defaults.tuning)
+        for name in TUNING_FIELDS:
+            if name in tuning_raw:
+                tuning[name] = _number(
+                    tuning_raw[name], field_name=f"tuning.{name}", minimum=0.0, maximum=10.0
                 )
 
         sensitivities_raw = raw.get("sensitivities", [])
@@ -124,9 +141,18 @@ def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
         for index, item in enumerate(sensitivities_raw):
             if not isinstance(item, Mapping) or not isinstance(item.get("topic"), str):
                 raise ValueError(f"sensitivities[{index}] must contain a topic")
+            topic = item["topic"].strip()
+            if not topic:
+                raise ValueError(f"sensitivities[{index}].topic must not be empty")
+            _warn_unknown_fields(
+                item,
+                location=f"session_affect.sensitivities[{index}]",
+                allowed={"topic", "intensity"},
+                warnings=warnings,
+            )
             sensitivities.append(
                 Sensitivity(
-                    topic=item["topic"].strip(),
+                    topic=topic,
                     intensity=_number(
                         item.get("intensity", 0.5),
                         field_name=f"sensitivities[{index}].intensity",
@@ -135,7 +161,7 @@ def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
                     ),
                 )
             )
-        return AffectConfig(1, traits, dynamics, tuple(sensitivities)), warnings
+        return AffectConfig(1, traits, tuning, tuple(sensitivities)), warnings
     except (TypeError, ValueError) as exc:
         warnings.append(f"Invalid session_affect configuration: {exc}; using neutral defaults")
         return defaults, warnings

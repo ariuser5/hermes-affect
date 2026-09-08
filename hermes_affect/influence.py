@@ -11,29 +11,19 @@ from .models import ParticipantRelation, clamp
 
 @dataclass(frozen=True)
 class ParticipantTraits:
-    social_influence: float = 0.5
-    leadership_drive: float = 0.5
-    deference: float = 0.5
-    pride: float = 0.5
+    """Public or locally resolved temperament, with no mutable group state."""
+
     reactivity: float = 0.5
-    patience: float = 0.5
-    conflict_avoidance: float = 0.5
+    persistence: float = 0.5
+    pride: float = 0.5
     playfulness: float = 0.5
-    seriousness: float = 0.5
+    assertiveness: float = 0.5
+    social_influence: float = 0.5
+    receptiveness: float = 0.5
 
     @classmethod
     def from_config(cls, config: AffectConfig) -> ParticipantTraits:
-        return cls(
-            social_influence=config.traits["social_influence"],
-            leadership_drive=config.traits["leadership_drive"],
-            deference=config.traits["deference"],
-            pride=config.traits["pride"],
-            reactivity=config.traits["reactivity"],
-            patience=config.traits["patience"],
-            conflict_avoidance=config.traits["conflict_avoidance"],
-            playfulness=config.traits["playfulness"],
-            seriousness=config.traits["seriousness"],
-        )
+        return cls(**{name: config.traits[name] for name in cls.__dataclass_fields__})
 
 
 class ParticipantTraitResolver(Protocol):
@@ -49,6 +39,22 @@ class NeutralTraitResolver:
         return self.traits.get(participant_id, self.neutral)
 
 
+@dataclass
+class LayeredTraitResolver:
+    """Resolve public temperament, then observed behavior, then neutral values."""
+
+    public_signatures: dict[str, ParticipantTraits] = field(default_factory=dict)
+    observed_traits: dict[str, ParticipantTraits] = field(default_factory=dict)
+    neutral: ParticipantTraits = field(default_factory=ParticipantTraits)
+
+    def resolve(self, participant_id: str) -> ParticipantTraits:
+        return (
+            self.public_signatures.get(participant_id)
+            or self.observed_traits.get(participant_id)
+            or self.neutral
+        )
+
+
 @dataclass(frozen=True)
 class InfluenceDecision:
     persuasion: float
@@ -62,21 +68,33 @@ def evaluate_influence(
     listener: ParticipantTraits,
     relation: ParticipantRelation,
 ) -> InfluenceDecision:
-    """Return separate policy factors rather than one unconditional multiplier."""
+    """Return separate, inspectable social policy factors.
 
-    leadership_signal = speaker.social_influence * 0.45 + speaker.leadership_drive * 0.55
-    receptivity = listener.deference * (0.55 + relation.respect * 0.45)
+    Administrative identity is intentionally absent. A speaker's effect comes
+    from assertiveness and social influence; a listener's effective receptivity
+    also depends on relationship respect. This keeps influence distinct from
+    permission to administer the plugin.
+    """
+
+    leadership_tendency = speaker.assertiveness * speaker.social_influence
+    effective_receptiveness = (
+        listener.receptiveness * max(relation.respect, 0.0) * speaker.social_influence
+    )
     trust_support = 0.5 + max(relation.trust, 0.0) * 0.5
     tension_pressure = relation.unresolved_tension * 0.55 + relation.irritation * 0.45
-    pride_pressure = listener.pride * 0.4 + listener.reactivity * 0.35
-    patience_buffer = listener.patience * 0.35 + listener.conflict_avoidance * 0.25
+    pride_pressure = (
+        listener.pride * 0.45
+        + listener.reactivity * 0.35
+        + listener.assertiveness * 0.20
+    )
+    persistence_buffer = listener.persistence * (1.0 - tension_pressure * 0.35)
 
-    persuasion = clamp(leadership_signal * receptivity * trust_support, 0.0, 1.0)
-    calming = clamp(persuasion * patience_buffer * (1.0 - tension_pressure * 0.5), 0.0, 1.0)
+    persuasion = clamp(leadership_tendency * effective_receptiveness * trust_support)
+    calming = clamp(persuasion * persistence_buffer * (1.0 - tension_pressure * 0.5))
     conflict_risk = clamp(
         tension_pressure * 0.55
         + pride_pressure * 0.25
-        + (1.0 - patience_buffer) * 0.20
+        + (1.0 - persistence_buffer) * 0.20
         - calming * 0.30,
         0.0,
         1.0,
@@ -86,11 +104,11 @@ def evaluate_influence(
         calming=calming,
         conflict_risk=conflict_risk,
         factors={
-            "leadership_signal": leadership_signal,
-            "receptivity": receptivity,
+            "leadership_tendency": leadership_tendency,
+            "effective_receptiveness": effective_receptiveness,
             "trust_support": trust_support,
             "tension_pressure": tension_pressure,
             "pride_pressure": pride_pressure,
-            "patience_buffer": patience_buffer,
+            "persistence_buffer": persistence_buffer,
         },
     )

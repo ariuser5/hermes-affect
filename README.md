@@ -19,6 +19,20 @@ Hermes hook payloads, profile-home discovery, compression lineage handling,
 administrative identity plumbing, garbage collection, and full retry
 idempotency must be validated against the target Hermes image before deployment.
 
+## Session affect configuration
+
+The machine-readable `session_affect` section uses seven stable traits:
+`reactivity`, `persistence`, `pride`, `playfulness`, `assertiveness`,
+`social_influence`, and `receptiveness`. Each is inclusive `[0, 1]`. Event
+strength controls are separate under `tuning`: `expression_gain`,
+`escalation_gain`, and `repair_gain`. Missing fields use neutral defaults;
+invalid recognized values fall back safely with an administrative warning.
+
+The full authoring schema is [`schemas/session_affect.schema.json`](schemas/session_affect.schema.json).
+Derived concepts and configuration behavior are documented in
+[`docs/architecture.md`](docs/architecture.md). Unknown fields are ignored
+with an administrative warning.
+
 ## Development
 
 ```bash

@@ -28,7 +28,10 @@ def derive_posture(state: AffectState, config: AffectConfig) -> ResponsePosture:
     if state.response_posture == ResponsePosture.MEDIATION:
         return ResponsePosture.MEDIATION
     if state.open_conflicts and (state.frustration > 0.30 or state.offended > 0.30):
-        if config.dynamics["expression_gain"] >= 1.75:
+        if (
+            config.tuning["expression_gain"] >= 1.75
+            and config.traits["assertiveness"] >= 0.55
+        ):
             return ResponsePosture.COUNTERATTACK
         return ResponsePosture.GUARDED
     if state.frustration > 0.65 or state.offended > 0.65:
@@ -36,7 +39,7 @@ def derive_posture(state: AffectState, config: AffectConfig) -> ResponsePosture:
     if state.frustration > 0.45:
         return ResponsePosture.GUARDED
     if state.valence > 0.45:
-        if config.traits["playfulness"] > 0.65 and config.traits["humor_tolerance"] > 0.55:
+        if config.traits["playfulness"] > 0.65:
             return ResponsePosture.PLAYFUL
         return ResponsePosture.WARM
     return ResponsePosture.NORMAL_ENGAGEMENT

@@ -17,8 +17,9 @@ chain-of-thought.
 
 1. `on_session_start` loads and validates the delimited `SOUL.md` section.
 2. The plugin stores the SOUL hash and predisposition snapshot in new state.
-3. `pre_llm_call` applies decay, classifies clear deterministic events, applies
-   interventions, derives posture, and injects a concise internal summary.
+3. `pre_llm_call` applies persistence-based decay, classifies clear
+   deterministic events, applies interventions, derives posture, and injects a
+   concise internal summary.
 4. `post_llm_call` checkpoints bounded state only.
 5. `on_session_reset` and a genuinely new Hermes session establish the relevant
    boundary; `/affect reset` resets only plugin state.
@@ -26,13 +27,47 @@ chain-of-thought.
 Compression lineage handling through `parent_session_id`, richer middleware,
 full retry idempotency, and coordinated group state remain follow-up work.
 
+## Core temperament model
+
+The stable configuration has seven independent traits, each in the inclusive
+range `[0, 1]`:
+
+- `reactivity`: how quickly and strongly affect changes after an event.
+- `persistence`: how slowly frustration, offense, and relational tension decay.
+- `pride`: sensitivity to disrespect, embarrassment, status, and competence
+  challenges.
+- `playfulness`: how readily ambiguity is interpreted as banter or humor.
+- `assertiveness`: tendency to confront, intervene, lead, resist, or express
+  disagreement instead of withdrawing.
+- `social_influence`: how much this participant affects others.
+- `receptiveness`: how much this participant is affected by trusted, respected,
+  or influential participants.
+
+These are stable predispositions, not mutable session state. Runtime state
+contains mood and relationships separately. `expression_gain`,
+`escalation_gain`, and `repair_gain` live under `tuning` and control how
+strongly the engine expresses, escalates, and repairs events. They are bounded
+for numeric stability without imposing a low global influence ceiling.
+
+The engine derives narrower concepts instead of adding overlapping knobs:
+leadership tendency is mainly `assertiveness × social_influence`; effective
+receptiveness is `listener.receptiveness × relationship respect ×
+speaker.social_influence`; persistence and current state derive behavioral
+stability and lingering tension. Free-form style guidance remains
+outside the numeric schema and can be amplified or suppressed through posture.
+
 ## Social influence
 
-`ParticipantTraitResolver` deliberately separates the speaker's influence and
-leadership from the listener's deference, respect, trust, tension, and
-temperament. The policy returns inspectable factors plus persuasion, calming,
-and conflict-risk decisions. It does not collapse all social behavior into one
-unconditional multiplier.
+`LayeredTraitResolver` resolves a public temperament signature when one is
+available, otherwise observed behavior/history, and finally neutral defaults.
+The resolver is deliberately local and has no shared mutable group state.
+Public signatures should remain limited to non-sensitive traits such as
+playfulness, assertiveness, and social influence.
 
-Unknown participants use neutral traits. The MVP has no shared mutable group
-state document.
+The policy returns inspectable factors plus persuasion, calming, and
+conflict-risk decisions. An influential bot can calm a receptive participant;
+a low-receptive participant can resist; a proud bot can challenge a leader; a
+playful influential participant can turn ambiguity into banter; and a serious
+participant can become irritated by the same joke. Social influence never
+grants administrative authority. Unknown configuration fields are warned about
+and ignored without changing recognized values.

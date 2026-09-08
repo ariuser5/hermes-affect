@@ -8,26 +8,21 @@ session_affect:
   schema_version: 1
   traits:
     reactivity: 0.68
+    persistence: 0.75
     pride: 0.78
-    patience: 0.42
-    forgiveness: 0.35
-    humor_tolerance: 0.72
     playfulness: 0.65
-    seriousness: 0.55
-    sarcasm: 0.81
-    conflict_avoidance: 0.20
+    assertiveness: 0.60
     social_influence: 0.70
-    leadership_drive: 0.60
-    deference: 0.35
-  dynamics:
-    emotional_decay: 0.45
-    grudge_persistence: 0.75
-    escalation_gain: 1.0
+    receptiveness: 0.35
+  tuning:
     expression_gain: 1.0
+    escalation_gain: 1.0
+    repair_gain: 1.0
   sensitivities:
     - topic: competence
       intensity: 0.70
 ```
 
-Missing sections use documented neutral defaults. Invalid sections are rejected
-as a whole, logged administratively, and replaced with neutral defaults.
+Missing fields use neutral defaults. Invalid recognized values are rejected as a
+whole, logged administratively, and replaced with neutral defaults. Unknown
+fields are ignored with an administrative warning.

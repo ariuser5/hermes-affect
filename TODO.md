@@ -9,8 +9,8 @@ instructions belong in the infrastructure repository that runs Hermes.
 - [x] Create the standalone plugin scaffold.
 - [x] Add the general Hermes plugin adapter and manifest.
 - [x] Add unit tests, packaging metadata, documentation, and CI.
-- [ ] Commit the Ruff fixes and manual-only workflow change.
-- [ ] Push the CI fix commit to `main`.
+- [x] Commit the Ruff fixes and manual-only workflow change.
+- [x] Push the CI fix commit to `main`.
 - [ ] Trigger CI manually from `main`.
 - [ ] Confirm every Python matrix job passes before beginning runtime work.
 
@@ -20,6 +20,25 @@ Acceptance criteria:
 - `ruff check .` passes.
 - CI runs only through `workflow_dispatch`.
 - No deployment repository or running Hermes configuration is changed.
+
+## Design revision — compact seven-trait model
+
+- [x] Replace overlapping core fields with reactivity, persistence, pride,
+  playfulness, assertiveness, social influence, and receptiveness.
+- [x] Move expression, escalation, and repair controls under `tuning`.
+- [x] Add the JSON Schema authoring reference and update the example SOUL.
+- [x] Derive leadership, receptiveness, humor interpretation, and persistence
+  behaviors instead of storing duplicate traits.
+- [x] Warn about unknown fields without silently reinterpreting them.
+- [x] Add boundary, fallback, derivation, decay, tuning, and style-separation
+  tests.
+
+Acceptance criteria:
+
+- The runtime and authoring schema expose exactly seven core traits.
+- Missing values use neutral defaults; invalid recognized values use a complete
+  neutral fallback with an administrative warning.
+- Unknown fields do not silently change behavior.
 
 ## Phase 1 — freeze the Hermes compatibility contract
 
@@ -45,12 +64,12 @@ Acceptance criteria:
 ## Phase 2 — SOUL configuration and initialization
 
 - [x] Define the delimited `session_affect` YAML convention.
-- [x] Define neutral defaults for all traits and dynamics.
+- [x] Define neutral defaults for all seven traits and tuning values.
 - [x] Validate schema version, types, numeric ranges, and sensitivities.
 - [x] Fall back safely when the section is missing or invalid.
 - [x] Emit administrative warnings for invalid configuration.
 - [x] Store the SOUL SHA-256 hash and predisposition snapshot in session state.
-- [ ] Add fixtures for missing, valid, partially specified, and invalid SOULs.
+- [x] Add fixtures for missing, valid, partially specified, and invalid SOULs.
 - [ ] Confirm free-form SOUL prose is never sent to an LLM for configuration
   extraction during session startup.
 - [ ] Document the future calibration tool and its mandatory review step.
@@ -74,7 +93,7 @@ Acceptance criteria:
 - [ ] Add restart tests that resume an existing session without resetting it.
 - [ ] Add explicit tests for profile and session path isolation.
 - [ ] Document stale-lock and crash-recovery limitations.
-- [ ] Add a safe state schema version and migration boundary.
+- [ ] Add a safe state schema version boundary.
 
 Acceptance criteria:
 
@@ -89,10 +108,11 @@ Acceptance criteria:
 - [x] Cover praise, support, jokes, teasing, insults, disagreement, apology,
   reconciliation, moderation, mediation, provocation, topic steering, and
   leadership challenges.
-- [x] Add configurable emotional decay.
-- [x] Add configurable escalation and expression gains.
+- [x] Add persistence-based emotional decay.
+- [x] Add independent escalation, expression, and repair tuning gains.
+- [x] Activate topic sensitivities without adding another core trait.
 - [x] Allow rapid escalation, lingering tension, and reconciliation.
-- [ ] Add active sensitivity activation and topic matching.
+- [x] Add active sensitivity activation and topic matching.
 - [ ] Add bounded audit records containing event type, affected dimensions,
   old/new values, posture, and rule name.
 - [ ] Add tests for repeated teasing, high-pride escalation, suppressed
@@ -114,7 +134,7 @@ Acceptance criteria:
 - [x] Use neutral traits for unknown participants.
 - [x] Model influence through separate inspectable factors.
 - [ ] Persist observed participant style and influence estimates.
-- [ ] Add tests for respected leaders, low-deference resistance, leadership
+- [x] Add tests for respected leaders, low-receptive resistance, leadership
   challenges, bot-to-bot conflict, and bot-to-user relationships.
 - [ ] Document a future limited public temperament signature.
 - [ ] Do not implement shared mutable group atmosphere in the MVP.
@@ -203,7 +223,7 @@ Deployment gate:
 
 ## Explicit MVP non-goals
 
-- SQLite migration.
+- SQLite persistence transition.
 - Complete retry and crash-recovery idempotency.
 - Public temperament-signature discovery.
 - Shared mutable group atmosphere.
@@ -216,7 +236,7 @@ Deployment gate:
 ## Future roadmap
 
 When the MVP is stable, evaluate SQLite or another transactional/event-based
-store, safe schema migrations, limited public temperament signatures, group
+store, safe state-schema evolution, limited public temperament signatures, group
 atmosphere with clear ownership, coordinated room resets, distributed groups,
 optional structured LLM classification, and tools for visualizing relationship
 and influence changes over time.

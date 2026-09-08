@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.invalid/hermes-affect/session_affect.schema.json",
+  "title": "Hermes Affect session_affect configuration",
+  "description": "Seven stable temperament traits, independent runtime tuning, and topic sensitivities.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "traits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reactivity": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "persistence": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "pride": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "playfulness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "assertiveness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "social_influence": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5},
+        "receptiveness": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.5}
+      }
+    },
+    "tuning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expression_gain": {"type": "number", "minimum": 0, "maximum": 10, "default": 1.0},
+        "escalation_gain": {"type": "number", "minimum": 0, "maximum": 10, "default": 1.0},
+        "repair_gain": {"type": "number", "minimum": 0, "maximum": 10, "default": 1.0}
+      }
+    },
+    "sensitivities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["topic", "intensity"],
+        "properties": {
+          "topic": {"type": "string", "minLength": 1},
+          "intensity": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      }
+    }
+  }
+}
