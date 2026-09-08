@@ -32,6 +32,9 @@ Checkpoint date: 2026-09-09.
 - A local fake Hermes context now covers registration, lifecycle callbacks,
   state persistence, verified-admin command behavior, and affect-only command
   interventions; real Hermes payload compatibility is still unverified.
+- The working tree currently contains the next durable-state slice: restart
+  resume tests, profile/session isolation tests, and a state schema-version
+  boundary.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -39,7 +42,8 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Confirm the latest local commit passes a manually triggered
+1. Review and commit the durable-state slice when requested, then confirm the
+   latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
    contract against the target installation, currently documented as Hermes

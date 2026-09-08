@@ -230,6 +230,50 @@ class StorageTests(unittest.TestCase):
             self.assertIsNone(store.load("bot/a", "session:2"))
             self.assertTrue(store.state_path("bot/a", "session:1").exists())
 
+    def test_restart_resumes_existing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            first_process = StateStore(Path(temporary))
+            state = AffectState.initial("bot/a", "session:1")
+            state.revision = 4
+            state.frustration = 0.6
+            state.last_turn_id = "turn:4"
+            first_process.save(state)
+
+            restarted_process = StateStore(Path(temporary))
+            resumed = restarted_process.load("bot/a", "session:1")
+            self.assertIsNotNone(resumed)
+            self.assertEqual(resumed.revision, 4)
+            self.assertEqual(resumed.frustration, 0.6)
+            self.assertEqual(resumed.last_turn_id, "turn:4")
+
+    def test_profile_and_session_paths_are_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(Path(temporary))
+            profile_a_session_1 = AffectState.initial("bot/a", "session:1")
+            profile_a_session_2 = AffectState.initial("bot/a", "session:2")
+            profile_b_session_1 = AffectState.initial("bot/b", "session:1")
+            profile_a_session_1.frustration = 0.1
+            profile_a_session_2.frustration = 0.2
+            profile_b_session_1.frustration = 0.3
+            for state in (profile_a_session_1, profile_a_session_2, profile_b_session_1):
+                store.save(state)
+
+            paths = {
+                store.state_path("bot/a", "session:1"),
+                store.state_path("bot/a", "session:2"),
+                store.state_path("bot/b", "session:1"),
+            }
+            self.assertEqual(len(paths), 3)
+            self.assertEqual(store.load("bot/a", "session:1").frustration, 0.1)
+            self.assertEqual(store.load("bot/a", "session:2").frustration, 0.2)
+            self.assertEqual(store.load("bot/b", "session:1").frustration, 0.3)
+
+    def test_future_state_schema_version_is_rejected(self) -> None:
+        raw = AffectState.initial("bot/a", "session:1").to_dict()
+        raw["schema_version"] = 2
+        with self.assertRaisesRegex(ValueError, "Unsupported affect state schema version"):
+            AffectState.from_dict(raw)
+
 
 if __name__ == "__main__":
     unittest.main()

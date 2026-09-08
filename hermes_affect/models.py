@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
+STATE_SCHEMA_VERSION = 1
+
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -89,7 +91,7 @@ class AffectState:
 
     def to_dict(self) -> dict[str, Any]:
         return {
-            "schema_version": 1,
+            "schema_version": STATE_SCHEMA_VERSION,
             "profile_id": self.profile_id,
             "session_id": self.session_id,
             "created_at": self.created_at,
@@ -112,6 +114,9 @@ class AffectState:
 
     @classmethod
     def from_dict(cls, raw: Mapping[str, Any]) -> AffectState:
+        schema_version = raw.get("schema_version", STATE_SCHEMA_VERSION)
+        if isinstance(schema_version, bool) or schema_version != STATE_SCHEMA_VERSION:
+            raise ValueError(f"Unsupported affect state schema version: {schema_version}")
         return cls(
             profile_id=str(raw["profile_id"]),
             session_id=str(raw["session_id"]),

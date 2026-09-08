@@ -90,10 +90,10 @@ Acceptance criteria:
 - [x] Add a duplicate-processing guard using `last_turn_id`.
 - [ ] Add configurable abandoned-state garbage collection with a 90-day
   initial default.
-- [ ] Add restart tests that resume an existing session without resetting it.
-- [ ] Add explicit tests for profile and session path isolation.
+- [x] Add restart tests that resume an existing session without resetting it.
+- [x] Add explicit tests for profile and session path isolation.
 - [ ] Document stale-lock and crash-recovery limitations.
-- [ ] Add a safe state schema version boundary.
+- [x] Add a safe state schema version boundary.
 
 Acceptance criteria:
 
