@@ -30,6 +30,9 @@ Checkpoint date: 2026-09-08.
   event classification, affect dynamics, social-influence policy, response
   posture, documentation, examples, tests, and CI.
 - CI is intentionally manual-only through `workflow_dispatch`.
+- A local fake Hermes context now covers registration, lifecycle callbacks,
+  state persistence, and verified-admin command behavior; real Hermes payload
+  compatibility is still unverified.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait

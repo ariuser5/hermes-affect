@@ -51,7 +51,7 @@ Acceptance criteria:
 - [ ] Verify `ctx.register_command()` callback arguments.
 - [ ] Verify profile-home and `SOUL.md` discovery behavior.
 - [ ] Verify how compression exposes `parent_session_id`.
-- [ ] Add a fake Hermes context fixture covering the agreed callback shapes.
+- [x] Add a fake Hermes context fixture covering the agreed callback shapes.
 - [ ] Document any version-specific adapter code.
 
 Acceptance criteria:
