@@ -1,2 +1,3 @@
 # hermes-affect
-A Hermes Agent plugin for session-scoped moods, relationships, social influence, conflict, and personality-driven behavior without storing temporary affect as permanent memory.
+
+Hermes Affect is a session-scoped affective state engine for Hermes Agent. It gives each bot dynamic moods, participant-specific relationships, social influence, conflict escalation, reconciliation, and emotional decay, guided by its SOUL.md. Temporary affective state influences tone, cooperation, and participation without automatically becoming permanent memory.
