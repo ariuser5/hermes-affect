@@ -16,23 +16,22 @@ At the start of every session:
 
 ## Current checkpoint
 
-Checkpoint date: 2026-09-08.
+Checkpoint date: 2026-09-09.
 
 - The repository is `hermes-affect`.
-- `d85761e` (`ci: make workflow manual and Ruff-clean`) is the current `main`
-  commit and matches `origin/main`.
-- The working tree contains the uncommitted compact seven-trait design
-  revision: reactivity, persistence, pride, playfulness, assertiveness, social
-  influence, and receptiveness, with independent expression/escalation/repair
-  tuning.
+- `b1ff3a0` (`test: add fake Hermes adapter contract coverage`) is the current
+  local `main` commit; it is ahead of `origin/main`.
+- The compact seven-trait design is implemented: reactivity, persistence,
+  pride, playfulness, assertiveness, social influence, and receptiveness, with
+  independent expression/escalation/repair tuning.
 - The plugin scaffold is implemented: manifest, Hermes registration adapter,
   SOUL configuration validation, state models, JSON storage, deterministic
   event classification, affect dynamics, social-influence policy, response
   posture, documentation, examples, tests, and CI.
 - CI is intentionally manual-only through `workflow_dispatch`.
 - A local fake Hermes context now covers registration, lifecycle callbacks,
-  state persistence, and verified-admin command behavior; real Hermes payload
-  compatibility is still unverified.
+  state persistence, verified-admin command behavior, and affect-only command
+  interventions; real Hermes payload compatibility is still unverified.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -40,16 +39,14 @@ Checkpoint date: 2026-09-08.
 
 ## Immediate next work
 
-1. Review the compact-trait diff and commit it only when the user explicitly
-   asks for a commit.
-2. Confirm the resulting latest `main` commit passes a manually triggered
+1. Confirm the latest local commit passes a manually triggered
    GitHub Actions run.
-3. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
+2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
    contract against the target installation, currently documented as Hermes
    `0.20.2` with image tag `v2026.8.16`.
-4. Do not run the Raspberry Pi commands or use SSH unless the user explicitly
+3. Do not run the Raspberry Pi commands or use SSH unless the user explicitly
    authorizes that action.
-5. After compatibility fixtures are in place, continue through the TODO phases
+4. After compatibility fixtures are in place, continue through the TODO phases
    incrementally, keeping tests and documentation synchronized.
 
 ## Repository and deployment boundaries

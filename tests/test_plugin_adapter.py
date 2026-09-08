@@ -85,6 +85,74 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(denied, "Affect administration requires a verified user identity.")
             self.assertIn("session=session:one", allowed)
 
+    def test_reset_reinitializes_plugin_state_without_changing_session_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])
+            register(context)
+            kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+                "user_message": "you are an idiot",
+                "turn_id": "turn:one",
+            }
+            context.emit("on_session_start", **kwargs)
+            context.emit("pre_llm_call", **kwargs)
+            reset = context.invoke_command(
+                "affect",
+                args_raw="reset",
+                sender_id="user:admin",
+                profile_id="bot:one",
+                session_id="session:one",
+            )
+
+            state = context.emit(
+                "pre_llm_call",
+                profile_id="bot:one",
+                session_id="session:one",
+            )
+            self.assertEqual(reset, "Affective state reset for this session.")
+            self.assertIn("Mood: neutral", state["context"])
+
+    def test_calm_and_heat_commands_change_only_plugin_affect(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+            context.emit("on_session_start", **base)
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="you are an idiot",
+                turn_id="turn:one",
+            )
+            store_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            before = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+            admin_base = {**base, "sender_id": "user:admin"}
+
+            calm = context.invoke_command(
+                "affect", args_raw="calm", **admin_base
+            )
+            after_calm = AffectState.from_dict(
+                json.loads(store_path.read_text(encoding="utf-8"))
+            )
+            heat = context.invoke_command(
+                "affect", args_raw="heat", **admin_base
+            )
+            after_heat = AffectState.from_dict(
+                json.loads(store_path.read_text(encoding="utf-8"))
+            )
+
+            self.assertEqual(calm, "Affective state instructed to calm.")
+            self.assertEqual(heat, "Affective state instructed to heat.")
+            self.assertLess(after_calm.frustration, before.frustration)
+            self.assertGreater(after_heat.frustration, after_calm.frustration)
+            self.assertEqual(after_heat.session_id, "session:one")
+
 
 if __name__ == "__main__":
     unittest.main()

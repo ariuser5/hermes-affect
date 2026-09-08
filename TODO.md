@@ -168,10 +168,10 @@ Acceptance criteria:
 ## Phase 7 — user and bot interventions
 
 - [x] Register the `/affect` command surface.
-- [ ] Implement `/affect status` as administrative debug output.
-- [ ] Implement `/affect reset` without changing Hermes session state.
-- [ ] Implement `/affect calm`.
-- [ ] Implement `/affect heat`.
+- [x] Implement `/affect status` as administrative debug output.
+- [x] Implement `/affect reset` without changing Hermes session state.
+- [x] Implement `/affect calm`.
+- [x] Implement `/affect heat`.
 - [ ] Define reviewed behavior for `/affect tune`.
 - [ ] Verify sender identity using Hermes-provided authenticated identity data.
 - [ ] Ensure bots cannot imitate verified-user administrative authority.
