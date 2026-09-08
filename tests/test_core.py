@@ -29,7 +29,13 @@ class SoulConfigTests(unittest.TestCase):
 
     def test_valid_section_preserves_social_traits(self) -> None:
         config, warnings = parse_soul_affect(
-            """session_affect:\n  schema_version: 1\n  traits:\n    social_influence: 0.9\n    leadership_drive: 0.8\n    deference: 0.2\n"""
+            """session_affect:
+  schema_version: 1
+  traits:
+    social_influence: 0.9
+    leadership_drive: 0.8
+    deference: 0.2
+"""
         )
         self.assertEqual(warnings, [])
         self.assertEqual(config.traits["social_influence"], 0.9)
@@ -51,7 +57,10 @@ class DynamicsTests(unittest.TestCase):
         self.assertEqual(rule, "direct_offense")
         self.assertGreater(state.frustration, 0.3)
         self.assertIn("bot:other", state.open_conflicts)
-        self.assertIn(derive_posture(state, config), {ResponsePosture.GUARDED, ResponsePosture.COUNTERATTACK})
+        self.assertIn(
+            derive_posture(state, config),
+            {ResponsePosture.GUARDED, ResponsePosture.COUNTERATTACK},
+        )
 
     def test_decay_reduces_state_without_erasing_relationship(self) -> None:
         config = neutral_config()

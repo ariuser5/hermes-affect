@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Mapping
+from typing import Any
 
 
 def utc_now() -> str:
@@ -37,7 +38,7 @@ class ParticipantRelation:
         }
 
     @classmethod
-    def from_dict(cls, raw: Mapping[str, Any]) -> "ParticipantRelation":
+    def from_dict(cls, raw: Mapping[str, Any]) -> ParticipantRelation:
         return cls(
             trust=float(raw.get("trust", 0.0)),
             affinity=float(raw.get("affinity", 0.0)),
@@ -78,7 +79,7 @@ class AffectState:
         *,
         soul_sha256: str | None = None,
         predisposition: Mapping[str, Any] | None = None,
-    ) -> "AffectState":
+    ) -> AffectState:
         return cls(
             profile_id=profile_id,
             session_id=session_id,
@@ -110,7 +111,7 @@ class AffectState:
         }
 
     @classmethod
-    def from_dict(cls, raw: Mapping[str, Any]) -> "AffectState":
+    def from_dict(cls, raw: Mapping[str, Any]) -> AffectState:
         return cls(
             profile_id=str(raw["profile_id"]),
             session_id=str(raw["session_id"]),

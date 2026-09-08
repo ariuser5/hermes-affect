@@ -22,7 +22,7 @@ class ParticipantTraits:
     seriousness: float = 0.5
 
     @classmethod
-    def from_config(cls, config: AffectConfig) -> "ParticipantTraits":
+    def from_config(cls, config: AffectConfig) -> ParticipantTraits:
         return cls(
             social_influence=config.traits["social_influence"],
             leadership_drive=config.traits["leadership_drive"],

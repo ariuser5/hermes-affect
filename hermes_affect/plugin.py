@@ -40,7 +40,8 @@ class AffectRuntime:
         self.soul_warnings: list[str] = []
 
     def _profile_id(self, kwargs: dict[str, Any]) -> str:
-        return str(kwargs.get("profile_id") or kwargs.get("profile_name") or os.environ.get("HERMES_PROFILE", "default"))
+        profile_id = kwargs.get("profile_id") or kwargs.get("profile_name")
+        return str(profile_id or os.environ.get("HERMES_PROFILE", "default"))
 
     def _soul_path(self, kwargs: dict[str, Any]) -> Path:
         configured = _config_value(self.ctx, "soul_path", None)
@@ -185,7 +186,10 @@ class AffectRuntime:
             del result
             return f"Affective state instructed to {action}."
         if action == "tune":
-            return "The tune command is reserved for reviewed configuration changes in this scaffold."
+            return (
+                "The tune command is reserved for reviewed configuration changes "
+                "in this scaffold."
+            )
         return "Usage: /affect status|reset|calm|heat|tune"
 
     def _is_verified_admin(self, kwargs: dict[str, Any]) -> bool:
@@ -232,4 +236,8 @@ def register(ctx: Any) -> None:
     ctx.register_hook("on_session_end", runtime.on_session_end)
     ctx.register_hook("on_session_reset", runtime.on_session_reset)
     ctx.register_hook("on_session_finalize", runtime.on_session_finalize)
-    ctx.register_command("affect", runtime.command, "Inspect or control session-scoped affective state")
+    ctx.register_command(
+        "affect",
+        runtime.command,
+        "Inspect or control session-scoped affective state",
+    )

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, field
-from typing import Any, Mapping
+from typing import Any
 
 TRAIT_FIELDS = (
     "reactivity",
@@ -234,7 +235,8 @@ def parse_soul_affect(soul_text: str) -> tuple[AffectConfig, list[str]]:
             try:
                 decoded = yaml.safe_load("session_affect:\n" + match.group("body"))
             except yaml.YAMLError as exc:
-                return neutral_config(), [f"Invalid session_affect YAML: {exc}; using neutral defaults"]
+                warning = f"Invalid session_affect YAML: {exc}; using neutral defaults"
+                return neutral_config(), [warning]
         return validate_config(decoded.get("session_affect"))
     except (AttributeError, TypeError, ValueError) as exc:
         return neutral_config(), [f"Invalid session_affect YAML: {exc}; using neutral defaults"]

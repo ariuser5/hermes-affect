@@ -6,9 +6,9 @@ import json
 import os
 import tempfile
 import time
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from .models import AffectState
 
@@ -24,7 +24,7 @@ class StateFileLock:
         self.timeout = timeout
         self._handle: int | None = None
 
-    def __enter__(self) -> "StateFileLock":
+    def __enter__(self) -> StateFileLock:
         deadline = time.monotonic() + self.timeout
         self.path.parent.mkdir(parents=True, exist_ok=True)
         while True:
@@ -52,7 +52,8 @@ class StateStore:
         self.root = Path(root).expanduser()
 
     def state_path(self, profile_id: str, session_id: str) -> Path:
-        return self.root / _path_component(profile_id) / "sessions" / f"{_path_component(session_id)}.json"
+        filename = f"{_path_component(session_id)}.json"
+        return self.root / _path_component(profile_id) / "sessions" / filename
 
     @contextmanager
     def locked(self, profile_id: str, session_id: str) -> Iterator[Path]:
