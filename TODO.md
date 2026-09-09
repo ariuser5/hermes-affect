@@ -52,7 +52,7 @@ Acceptance criteria:
 - [ ] Verify profile-home and `SOUL.md` discovery behavior.
 - [ ] Verify how compression exposes `parent_session_id`.
 - [x] Add a fake Hermes context fixture covering the agreed callback shapes.
-- [ ] Document any version-specific adapter code.
+- [x] Document the current adapter contract and any version-specific code.
 
 Acceptance criteria:
 

@@ -71,6 +71,47 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_accepts_profile_name_and_positional_command_arguments(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])
+            register(context)
+            kwargs = {
+                "profile_name": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+
+            context.emit("on_session_start", **kwargs)
+            result = context.invoke_command(
+                "affect",
+                "status",
+                sender_id="user:admin",
+                profile_name="bot:one",
+                session_id="session:one",
+            )
+
+            self.assertIn("session=session:one", result)
+            self.assertTrue(
+                (Path(temporary) / "bot_one" / "sessions" / "session_one.json").exists()
+            )
+
+    def test_lifecycle_hooks_accept_payload_without_optional_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            kwargs = {"profile_id": "bot:one", "session_id": "session:one"}
+
+            context.emit("on_session_start", **kwargs)
+            context.emit("pre_llm_call", **kwargs)
+            context.emit("post_llm_call", **kwargs)
+            context.emit("on_session_reset", **kwargs)
+            context.emit("on_session_finalize", **kwargs)
+            context.emit("on_session_end", **kwargs)
+
+            self.assertTrue(
+                (Path(temporary) / "bot_one" / "sessions" / "session_one.json").exists()
+            )
+
     def test_audit_records_are_bounded_and_transcript_free(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)

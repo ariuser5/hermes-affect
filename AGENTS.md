@@ -33,10 +33,10 @@ Checkpoint date: 2026-09-09.
   state persistence, verified-admin command behavior, and affect-only command
   interventions; real Hermes payload compatibility is still unverified.
 - The durable-state restart, profile/session isolation, schema-version,
-  command-intervention, conservative 90-day garbage-collection, and bounded
-  transcript-free audit-record slices are committed. The working tree currently
-  contains the remaining Phase 4 dynamics/influence coverage tests and TODO
-  checkpoint update.
+  command-intervention, conservative 90-day garbage-collection, bounded
+  transcript-free audit-record, and Phase 4 dynamics/influence coverage slices
+  are committed. The working tree currently contains the Phase 1 compatibility
+  contract document, local payload-alias tests, and TODO checkpoint update.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -44,8 +44,8 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the Phase 4 dynamics/influence coverage slice when
-   requested, then confirm the latest local commit passes a manually triggered
+1. Review and commit the Phase 1 compatibility-contract slice when requested,
+   then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
    contract against the target installation, currently documented as Hermes

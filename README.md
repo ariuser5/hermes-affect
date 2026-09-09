@@ -46,6 +46,7 @@ directory with the plugin setting `state_dir` or the
 `HERMES_AFFECT_STATE_DIR` environment variable.
 
 See [`docs/architecture.md`](docs/architecture.md),
+[`docs/hermes-compatibility.md`](docs/hermes-compatibility.md),
 [`docs/installation.md`](docs/installation.md),
 [`docs/privacy-and-retention.md`](docs/privacy-and-retention.md), and
 [`examples/soul/basic.md`](examples/soul/basic.md).
