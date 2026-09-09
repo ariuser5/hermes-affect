@@ -266,6 +266,29 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertLess(after_calm.frustration, before_calm.frustration)
             self.assertEqual(after_calm.audit_records[-1]["rule_name"], "verified_user_calm")
 
+    def test_injected_guidance_omits_numeric_state_and_raw_message(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            kwargs = {
+                "profile_id": "bot:test",
+                "session_id": "session:privacy",
+                "sender_id": "user:1",
+                "user_message": "private phrase that must not be echoed",
+                "turn_id": "turn:one",
+            }
+
+            context.emit("on_session_start", **kwargs)
+            result = context.emit("pre_llm_call", **kwargs)
+
+            self.assertIsNotNone(result)
+            guidance = result["context"]
+            self.assertIn("Internal affective guidance", guidance)
+            self.assertNotIn("private phrase that must not be echoed", guidance)
+            self.assertNotIn("reactivity", guidance)
+            self.assertNotIn("frustration", guidance)
+            self.assertNotIn("relationships", guidance)
+
     def test_accepts_profile_name_and_positional_command_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

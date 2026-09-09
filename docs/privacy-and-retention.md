@@ -32,6 +32,20 @@ session/API history depending on the installed Hermes version. The injected
 summary is therefore deliberately short and never contains the complete JSON
 state.
 
+## Request-level privacy hardening
+
+The MVP uses the public `pre_llm_call` surface because it is the compatibility
+boundary currently covered by local fixtures. A future Hermes request-middleware
+hook could attach internal guidance only while assembling one model request,
+which may reduce the chance that the guidance becomes part of durable
+session/API history. That approach also introduces a new version-specific
+dependency and must be verified against the target runtime before adoption.
+
+Until then, `shadow_mode`, conservative `expression_gain`, short guidance, and
+the omission of numerical state or raw messages are the available privacy
+controls. The plugin does not claim that the current hook guarantees
+request-only visibility.
+
 Administrative status/debug output is separate from normal response context.
 Administrative commands must verify the configured user identity. A bot's
 message is social influence, not administrative authority.

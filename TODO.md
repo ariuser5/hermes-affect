@@ -157,7 +157,8 @@ Acceptance criteria:
 - [x] Add configurable expression strength.
 - [ ] Confirm whether injected context appears in session/API history for the
   target Hermes version.
-- [ ] Evaluate request middleware as a later privacy-hardening option.
+- [x] Evaluate request middleware as a later privacy-hardening option; defer
+  implementation until the target Hermes hook is verified.
 
 Acceptance criteria:
 
