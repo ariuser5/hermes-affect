@@ -172,7 +172,7 @@ Acceptance criteria:
 - [x] Implement `/affect reset` without changing Hermes session state.
 - [x] Implement `/affect calm`.
 - [x] Implement `/affect heat`.
-- [ ] Define reviewed behavior for `/affect tune`.
+- [x] Define reviewed behavior for `/affect tune`.
 - [ ] Verify sender identity using Hermes-provided authenticated identity data.
 - [x] Ensure bots cannot imitate verified-user administrative authority.
 - [x] Add natural-language moderation tests for calm, stop, continue, and

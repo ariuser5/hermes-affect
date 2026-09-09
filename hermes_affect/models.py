@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
+
+from .config import TUNING_FIELDS
 
 STATE_SCHEMA_VERSION = 1
 AUDIT_RECORD_LIMIT = 64
@@ -74,6 +77,7 @@ class AffectState:
     response_posture: str = "normal_engagement"
     soul_sha256: str | None = None
     predisposition: dict[str, Any] = field(default_factory=dict)
+    tuning_overrides: dict[str, float] = field(default_factory=dict)
 
     @classmethod
     def initial(
@@ -113,6 +117,7 @@ class AffectState:
             "response_posture": self.response_posture,
             "soul_sha256": self.soul_sha256,
             "predisposition": self.predisposition,
+            "tuning_overrides": dict(self.tuning_overrides),
         }
 
     @classmethod
@@ -126,6 +131,18 @@ class AffectState:
             if isinstance(audit_raw, list)
             else []
         )
+        raw_overrides = raw.get("tuning_overrides", {})
+        tuning_overrides = {}
+        if isinstance(raw_overrides, Mapping):
+            for name in TUNING_FIELDS:
+                value = raw_overrides.get(name)
+                if (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(float(value))
+                    and 0.0 <= float(value) <= 10.0
+                ):
+                    tuning_overrides[name] = float(value)
         return cls(
             profile_id=str(raw["profile_id"]),
             session_id=str(raw["session_id"]),
@@ -149,6 +166,7 @@ class AffectState:
             response_posture=str(raw.get("response_posture", "normal_engagement")),
             soul_sha256=raw.get("soul_sha256"),
             predisposition=dict(raw.get("predisposition", {})),
+            tuning_overrides=tuning_overrides,
         )
 
     def add_audit_record(self, record: Mapping[str, Any]) -> None:

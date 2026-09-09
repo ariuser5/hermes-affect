@@ -26,6 +26,10 @@ Expression strength is configured in the `session_affect.tuning` section of
 state updates enabled but suppresses affective context; the neutral default is
 `1`.
 
+An administrator can temporarily override one of the three tuning values for
+the active plugin session with `/affect tune <field> <value>`. Only the three
+tuning fields are accepted; core traits and `SOUL.md` are not modified.
+
 The plugin performs abandoned-state cleanup on session startup. The default
 retention threshold is 90 days; override it with the numeric plugin setting
 `state_gc_days`. Cleanup skips the active session, malformed state files, and

@@ -6,11 +6,12 @@ import hashlib
 import logging
 import math
 import os
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .config import AffectConfig, neutral_config, parse_soul_affect
+from .config import TUNING_FIELDS, AffectConfig, neutral_config, parse_soul_affect
 from .dynamics import apply_event, decay_state
 from .events import EventClassifier
 from .influence import observe_style
@@ -128,9 +129,10 @@ class AffectRuntime:
         state = self._state(kwargs)
         if state is None:
             return None
+        config = self._config_for_state(state)
         turn_id = kwargs.get("turn_id")
         if turn_id and state.last_turn_id == str(turn_id):
-            return None if self.shadow_mode else self._context(state, self.config)
+            return None if self.shadow_mode else self._context(state, config)
 
         try:
             elapsed_hours = max(
@@ -143,7 +145,7 @@ class AffectRuntime:
             )
         except (TypeError, ValueError):
             elapsed_hours = 0.0
-        decay_state(state, self.config, elapsed_hours)
+        decay_state(state, config, elapsed_hours)
 
         message = str(kwargs.get("user_message") or "")
         speaker_id = str(kwargs.get("sender_id") or "user:unknown")
@@ -161,7 +163,7 @@ class AffectRuntime:
         ):
             last_event = event
             before = self._audit_snapshot(state, event.speaker_id)
-            rule = apply_event(state, event, self.config)
+            rule = apply_event(state, event, config)
             after = self._audit_snapshot(state, event.speaker_id)
             audit_entries.append((event, rule, before, after))
             self._record_observation(state, event, before, after)
@@ -172,7 +174,7 @@ class AffectRuntime:
                 rule,
                 state.response_posture,
             )
-        state.response_posture = derive_posture(state, self.config, last_event).value
+        state.response_posture = derive_posture(state, config, last_event).value
         for event, rule, before, after in audit_entries:
             state.add_audit_record(
                 {
@@ -192,7 +194,7 @@ class AffectRuntime:
         if self.shadow_mode:
             logger.info("shadow_mode active; affect context injection suppressed")
             return None
-        return self._context(state, self.config)
+        return self._context(state, config)
 
     def post_llm_call(self, **kwargs: Any) -> None:
         state = self._state(kwargs)
@@ -247,10 +249,22 @@ class AffectRuntime:
             del result
             return f"Affective state instructed to {action}."
         if action == "tune":
-            return (
-                "The tune command is reserved for reviewed configuration changes "
-                "in this scaffold."
-            )
+            if len(parts) != 3:
+                return "Usage: /affect tune expression_gain|escalation_gain|repair_gain <0..10>"
+            name = parts[1]
+            if name not in TUNING_FIELDS:
+                return "Only expression_gain, escalation_gain, and repair_gain may be tuned."
+            try:
+                value = float(parts[2])
+            except (TypeError, ValueError):
+                return "Tune value must be a finite number between 0 and 10."
+            if not math.isfinite(value) or not 0.0 <= value <= 10.0:
+                return "Tune value must be a finite number between 0 and 10."
+            state.tuning_overrides[name] = value
+            state.updated_at = utc_now()
+            state.revision += 1
+            self.store.save(state)
+            return f"Session tuning override set: {name}={value:g}."
         return "Usage: /affect status|reset|calm|heat|tune"
 
     def _is_verified_admin(self, kwargs: dict[str, Any]) -> bool:
@@ -259,6 +273,11 @@ class AffectRuntime:
             return False
         configured = _config_value(self.ctx, "admin_user_ids", [])
         return sender_id in {str(item) for item in configured} and bool(sender_id)
+
+    def _config_for_state(self, state: AffectState) -> AffectConfig:
+        tuning = dict(self.config.tuning)
+        tuning.update(state.tuning_overrides)
+        return replace(self.config, tuning=tuning)
 
     @staticmethod
     def _audit_snapshot(

@@ -396,6 +396,46 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertGreater(after_heat.frustration, after_calm.frustration)
             self.assertEqual(after_heat.session_id, "session:one")
 
+    def test_tune_command_persists_bounded_session_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])
+            register(context)
+            kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:admin",
+            }
+            context.emit("on_session_start", **kwargs)
+
+            invalid = context.invoke_command(
+                "affect", args_raw="tune pride 2", **kwargs
+            )
+            tuned = context.invoke_command(
+                "affect", args_raw="tune expression_gain 0", **kwargs
+            )
+            store_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+
+            self.assertIn("Only expression_gain", invalid)
+            self.assertEqual(tuned, "Session tuning override set: expression_gain=0.")
+            self.assertEqual(state.tuning_overrides, {"expression_gain": 0.0})
+
+            restarted = FakeHermesContext(
+                state_dir=temporary,
+                admin_user_ids=["user:admin"],
+            )
+            register(restarted)
+            restarted.emit("on_session_start", **kwargs)
+            result = restarted.emit(
+                "pre_llm_call",
+                profile_id="bot:one",
+                session_id="session:one",
+                sender_id="user:1",
+                user_message="good job",
+                turn_id="turn:one",
+            )
+            self.assertIsNone(result)
+
 
 if __name__ == "__main__":
     unittest.main()

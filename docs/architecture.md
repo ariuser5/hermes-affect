@@ -42,6 +42,11 @@ updates, low values request restrained guidance, and high values make the
 current posture more explicit. Numerical state is never included in the
 injected text.
 
+Verified administrators may use `/affect tune` to set a session-scoped override
+for `expression_gain`, `escalation_gain`, or `repair_gain` within `[0, 10]`.
+Overrides are persisted with plugin state, do not alter `SOUL.md`, and cannot
+change core traits or Hermes configuration.
+
 Compression lineage handling through `parent_session_id`, richer middleware,
 full retry idempotency, and coordinated group state remain follow-up work.
 
