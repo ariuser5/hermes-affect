@@ -205,6 +205,53 @@ class DynamicsTests(unittest.TestCase):
         )
         self.assertIn("user:1", suppressed_state.open_conflicts)
 
+    def test_event_postures_cover_mediation_steering_repair_and_pass(self) -> None:
+        config = neutral_config()
+        cases = (
+            (EventType.BOT_MEDIATION, None, ResponsePosture.MEDIATION),
+            (EventType.TOPIC_STEERING, None, ResponsePosture.TOPIC_STEERING),
+            (EventType.RECONCILIATION, None, ResponsePosture.RECONCILIATION),
+            (
+                EventType.USER_MODERATION,
+                "calm",
+                ResponsePosture.PASS,
+            ),
+        )
+
+        for event_type, action, expected in cases:
+            state = AffectState.initial("bot-a", event_type.value)
+            event = AffectiveEvent(event_type, "user:1", action=action)
+            self.assertEqual(derive_posture(state, config, event), expected)
+
+    def test_conflict_posture_can_avoid_topics_evade_or_refuse(self) -> None:
+        evasive_config = replace(
+            neutral_config(),
+            traits={**neutral_config().traits, "assertiveness": 0.2},
+            tuning={**neutral_config().tuning, "expression_gain": 0.5},
+        )
+        evasive_state = AffectState.initial("bot-a", "evasive")
+        evasive_state.open_conflicts["user:1"] = {"status": "open"}
+        evasive_state.frustration = 0.4
+        self.assertEqual(
+            derive_posture(evasive_state, evasive_config), ResponsePosture.EVASIVE
+        )
+
+        refusal_state = AffectState.initial("bot-a", "refusal")
+        refusal_state.open_conflicts["user:1"] = {"status": "open"}
+        refusal_state.frustration = 0.8
+        refusal_state.offended = 0.8
+        self.assertEqual(
+            derive_posture(refusal_state, evasive_config), ResponsePosture.REFUSAL
+        )
+
+        avoidance_state = AffectState.initial("bot-a", "avoidance")
+        avoidance_state.active_sensitivities.append("competence")
+        avoidance_state.open_conflicts["user:1"] = {"status": "open"}
+        avoidance_state.frustration = 0.4
+        self.assertEqual(
+            derive_posture(avoidance_state, evasive_config), ResponsePosture.TOPIC_AVOIDANCE
+        )
+
     def test_reconciliation_can_clear_a_sudden_conflict(self) -> None:
         config = neutral_config()
         state = AffectState.initial("bot-a", "session-1")

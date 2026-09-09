@@ -26,6 +26,12 @@ chain-of-thought.
 5. `on_session_reset` and a genuinely new Hermes session establish the relevant
    boundary; `/affect reset` resets only plugin state.
 
+Response posture is derived from the latest clear event plus bounded current
+state. The MVP can express mediation, reconciliation, topic steering, topic
+avoidance, guarded/evasive/refusal behavior, counterattack, and pass guidance
+through the internal context summary. Separate response-routing hooks are not
+assumed until the target Hermes version is verified.
+
 Compression lineage handling through `parent_session_id`, richer middleware,
 full retry idempotency, and coordinated group state remain follow-up work.
 

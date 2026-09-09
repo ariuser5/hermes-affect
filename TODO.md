@@ -151,7 +151,7 @@ Acceptance criteria:
 - [x] Derive normal, warm, playful, guarded, terse, and conflict postures.
 - [x] Keep numerical state out of ordinary model context.
 - [x] Mark injected material as internal guidance.
-- [ ] Add evasive, topic-avoidance, refusal, counterattack, mediation, topic
+- [x] Add evasive, topic-avoidance, refusal, counterattack, mediation, topic
   steering, and `pass` behaviors where the Hermes surface supports them.
 - [ ] Add shadow mode that updates/logs state without injecting context.
 - [ ] Add configurable expression strength.

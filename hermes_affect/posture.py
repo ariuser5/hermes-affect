@@ -5,6 +5,7 @@ from __future__ import annotations
 from enum import Enum
 
 from .config import AffectConfig
+from .events import AffectiveEvent, EventType
 from .models import AffectState
 
 
@@ -24,15 +25,35 @@ class ResponsePosture(str, Enum):
     PASS = "pass"
 
 
-def derive_posture(state: AffectState, config: AffectConfig) -> ResponsePosture:
-    if state.response_posture == ResponsePosture.MEDIATION:
-        return ResponsePosture.MEDIATION
+def derive_posture(
+    state: AffectState,
+    config: AffectConfig,
+    event: AffectiveEvent | None = None,
+) -> ResponsePosture:
+    if event is not None:
+        if event.event_type == EventType.BOT_MEDIATION:
+            return ResponsePosture.MEDIATION
+        if event.event_type == EventType.TOPIC_STEERING:
+            return ResponsePosture.TOPIC_STEERING
+        if event.event_type in {EventType.APOLOGY, EventType.RECONCILIATION}:
+            return ResponsePosture.RECONCILIATION
+        if event.event_type == EventType.USER_MODERATION and event.action == "calm":
+            return ResponsePosture.PASS
+    if state.active_sensitivities and (state.frustration > 0.30 or state.offended > 0.30):
+        return ResponsePosture.TOPIC_AVOIDANCE
     if state.open_conflicts and (state.frustration > 0.30 or state.offended > 0.30):
         if (
             config.tuning["expression_gain"] >= 1.75
             and config.traits["assertiveness"] >= 0.55
         ):
             return ResponsePosture.COUNTERATTACK
+        if state.offended > 0.65 and config.traits["assertiveness"] < 0.40:
+            return ResponsePosture.REFUSAL
+        if (
+            config.tuning["expression_gain"] <= 0.65
+            and config.traits["assertiveness"] < 0.40
+        ):
+            return ResponsePosture.EVASIVE
         return ResponsePosture.GUARDED
     if state.frustration > 0.65 or state.offended > 0.65:
         return ResponsePosture.TERSE

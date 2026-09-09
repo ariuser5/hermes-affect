@@ -143,12 +143,14 @@ class AffectRuntime:
         audit_entries: list[
             tuple[Any, str, dict[str, dict[str, float]], dict[str, dict[str, float]]]
         ] = []
+        last_event = None
         for event in self.classifier.classify(
             message,
             speaker_id=speaker_id,
             speaker_kind=speaker_kind,
             verified_user=verified_user,
         ):
+            last_event = event
             before = self._audit_snapshot(state, event.speaker_id)
             rule = apply_event(state, event, self.config)
             after = self._audit_snapshot(state, event.speaker_id)
@@ -161,7 +163,7 @@ class AffectRuntime:
                 rule,
                 state.response_posture,
             )
-        state.response_posture = derive_posture(state, self.config).value
+        state.response_posture = derive_posture(state, self.config, last_event).value
         for event, rule, before, after in audit_entries:
             state.add_audit_record(
                 {
