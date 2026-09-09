@@ -88,11 +88,11 @@ Acceptance criteria:
 - [x] Use atomic temporary-file replacement.
 - [x] Keep runtime state outside the source repository.
 - [x] Add a duplicate-processing guard using `last_turn_id`.
-- [ ] Add configurable abandoned-state garbage collection with a 90-day
+- [x] Add configurable abandoned-state garbage collection with a 90-day
   initial default.
 - [x] Add restart tests that resume an existing session without resetting it.
 - [x] Add explicit tests for profile and session path isolation.
-- [ ] Document stale-lock and crash-recovery limitations.
+- [x] Document stale-lock and crash-recovery limitations.
 - [x] Add a safe state schema version boundary.
 
 Acceptance criteria:

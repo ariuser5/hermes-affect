@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,7 +15,7 @@ from .dynamics import apply_event, decay_state
 from .events import EventClassifier
 from .models import AffectState, utc_now
 from .posture import derive_posture
-from .storage import StateStore
+from .storage import DEFAULT_ABANDONED_STATE_DAYS, StateStore
 
 logger = logging.getLogger("hermes-affect")
 
@@ -26,6 +27,22 @@ def _config_value(ctx: Any, key: str, default: Any) -> Any:
         return default
 
 
+def _state_gc_days(ctx: Any) -> float:
+    configured = _config_value(ctx, "state_gc_days", DEFAULT_ABANDONED_STATE_DAYS)
+    if (
+        isinstance(configured, bool)
+        or not isinstance(configured, (int, float))
+        or not math.isfinite(float(configured))
+        or configured <= 0
+    ):
+        logger.warning(
+            "Invalid state_gc_days setting; using default of %s days",
+            DEFAULT_ABANDONED_STATE_DAYS,
+        )
+        return float(DEFAULT_ABANDONED_STATE_DAYS)
+    return float(configured)
+
+
 class AffectRuntime:
     def __init__(self, ctx: Any) -> None:
         configured_root = _config_value(ctx, "state_dir", None)
@@ -34,6 +51,7 @@ class AffectRuntime:
             hermes_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
             root = hermes_home / "affect-state"
         self.store = StateStore(root)
+        self.state_gc_days = _state_gc_days(ctx)
         self.ctx = ctx
         self.classifier = EventClassifier()
         self.config = neutral_config()
@@ -85,6 +103,16 @@ class AffectRuntime:
     def on_session_start(self, **kwargs: Any) -> None:
         self.config, _ = self._load_config(kwargs)
         self._state(kwargs)
+        session_id = kwargs.get("session_id")
+        excluded = set()
+        if session_id:
+            excluded.add(self.store.state_path(self._profile_id(kwargs), str(session_id)))
+        report = self.store.garbage_collect(
+            max_age_days=self.state_gc_days,
+            exclude_paths=excluded,
+        )
+        if report.removed:
+            logger.info("Removed %d abandoned affect state file(s)", len(report.removed))
 
     def pre_llm_call(self, **kwargs: Any) -> dict[str, str] | None:
         state = self._state(kwargs)

@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from hermes_affect.config import CORE_TRAIT_FIELDS, TUNING_FIELDS, neutral_config, parse_soul_affect
@@ -273,6 +274,52 @@ class StorageTests(unittest.TestCase):
         raw["schema_version"] = 2
         with self.assertRaisesRegex(ValueError, "Unsupported affect state schema version"):
             AffectState.from_dict(raw)
+
+    def test_garbage_collection_removes_old_state_and_keeps_recent_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(Path(temporary))
+            now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            old = AffectState.initial("bot/a", "old")
+            old.updated_at = (now - timedelta(days=91)).isoformat()
+            recent = AffectState.initial("bot/a", "recent")
+            recent.updated_at = (now - timedelta(days=1)).isoformat()
+            store.save(old)
+            store.save(recent)
+
+            report = store.garbage_collect(max_age_days=90, now=now)
+
+            self.assertEqual(report.examined, 2)
+            self.assertEqual(report.removed, (store.state_path("bot/a", "old"),))
+            self.assertEqual(report.skipped, 1)
+            self.assertIsNone(store.load("bot/a", "old"))
+            self.assertIsNotNone(store.load("bot/a", "recent"))
+
+    def test_garbage_collection_skips_excluded_and_locked_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(Path(temporary))
+            now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+            excluded = AffectState.initial("bot/a", "excluded")
+            locked = AffectState.initial("bot/a", "locked")
+            for state in (excluded, locked):
+                state.updated_at = (now - timedelta(days=91)).isoformat()
+                store.save(state)
+            excluded_path = store.state_path("bot/a", "excluded")
+            locked_path = store.state_path("bot/a", "locked")
+            lock_path = locked_path.with_suffix(locked_path.suffix + ".lock")
+            lock_path.write_text("active", encoding="ascii")
+            try:
+                report = store.garbage_collect(
+                    max_age_days=90,
+                    now=now,
+                    exclude_paths={excluded_path},
+                )
+            finally:
+                lock_path.unlink()
+
+            self.assertEqual(report.removed, ())
+            self.assertEqual(report.skipped, 2)
+            self.assertTrue(excluded_path.exists())
+            self.assertTrue(locked_path.exists())
 
 
 if __name__ == "__main__":

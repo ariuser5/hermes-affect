@@ -17,6 +17,12 @@ separate persistent directory, for example:
 <runtime-root>/hermes-affect/<profile-id>/sessions/<session-id>.json
 ```
 
+The plugin performs abandoned-state cleanup on session startup. The default
+retention threshold is 90 days; override it with the numeric plugin setting
+`state_gc_days`. Cleanup skips the active session, malformed state files, and
+files whose lock cannot be acquired. It does not reclaim stale locks
+automatically.
+
 For a Docker deployment, inspect the existing persistent Hermes bind mount
 before selecting the runtime path. Prefer a dedicated subdirectory of that
 mount when ownership and backup boundaries are clear; otherwise use a separate
