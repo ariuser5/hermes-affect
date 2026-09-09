@@ -44,6 +44,10 @@ Local adapter tests exercise both command argument aliases (`args_raw` and
 `replacement_session_id`). These are fixture coverage points, not confirmation
 that the target Hermes version uses either spelling.
 
+`session_id` is the state-creation boundary: when it is absent, lifecycle and
+model hooks return without loading or creating affect state, and an
+administrative command reports that no active session was supplied.
+
 ## Not yet verified against the target runtime
 
 The following remain deployment compatibility checks rather than assumptions

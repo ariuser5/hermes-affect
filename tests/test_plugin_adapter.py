@@ -346,6 +346,33 @@ class PluginAdapterTests(unittest.TestCase):
                 new_path.read_text(encoding="utf-8"),
             )
 
+    def test_missing_session_identity_does_not_create_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(
+                state_dir=temporary,
+                admin_user_ids=["user:admin"],
+            )
+            register(context)
+            payload = {
+                "profile_id": "bot:one",
+                "sender_id": "user:1",
+                "user_message": "you are an idiot",
+                "turn_id": "turn:one",
+            }
+
+            context.emit("on_session_start", **payload)
+            result = context.emit("pre_llm_call", **payload)
+            status = context.invoke_command(
+                "affect",
+                args_raw="status",
+                profile_id="bot:one",
+                sender_id="user:admin",
+            )
+
+            self.assertIsNone(result)
+            self.assertEqual(status, "No active Hermes session was supplied.")
+            self.assertEqual(list(Path(temporary).rglob("*.json")), [])
+
     def test_lifecycle_hooks_accept_payload_without_optional_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)
