@@ -58,6 +58,8 @@ runtime's actual environment values.
 The runtime directory also falls back to `HERMES_AFFECT_STATE_DIR` when the
 context does not provide `state_dir`; local tests also verify that an explicit
 context `state_dir` takes precedence over that environment fallback.
+An incomplete session-start payload also skips both state initialization and
+garbage collection, so it cannot clean up unrelated sessions accidentally.
 
 ## Not yet verified against the target runtime
 

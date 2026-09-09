@@ -120,11 +120,15 @@ class AffectRuntime:
 
     def on_session_start(self, **kwargs: Any) -> None:
         self.config, _ = self._load_config(kwargs)
-        self._state(kwargs)
         session_id = kwargs.get("session_id")
-        excluded = set()
-        if session_id:
-            excluded.add(self.store.state_path(self._profile_id(kwargs), str(session_id)))
+        if not session_id:
+            logger.warning(
+                "Session start has no session_id; skipping affect state initialization "
+                "and garbage collection"
+            )
+            return
+        self._state(kwargs)
+        excluded = {self.store.state_path(self._profile_id(kwargs), str(session_id))}
         report = self.store.garbage_collect(
             max_age_days=self.state_gc_days,
             exclude_paths=excluded,

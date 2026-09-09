@@ -511,6 +511,29 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(status, "No active Hermes session was supplied.")
             self.assertEqual(list(Path(temporary).rglob("*.json")), [])
 
+    def test_incomplete_session_start_does_not_collect_existing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            initial_context = FakeHermesContext(state_dir=temporary)
+            register(initial_context)
+            initial_context.emit(
+                "on_session_start",
+                profile_id="bot:one",
+                session_id="session:old",
+            )
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_old.json"
+            stale_state = json.loads(state_path.read_text(encoding="utf-8"))
+            stale_state["updated_at"] = "2000-01-01T00:00:00+00:00"
+            state_path.write_text(json.dumps(stale_state), encoding="utf-8")
+
+            incomplete_context = FakeHermesContext(
+                state_dir=temporary,
+                state_gc_days=1,
+            )
+            register(incomplete_context)
+            incomplete_context.emit("on_session_start", profile_id="bot:one")
+
+            self.assertTrue(state_path.exists())
+
     def test_lifecycle_hooks_accept_payload_without_optional_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)
