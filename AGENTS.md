@@ -19,8 +19,8 @@ At the start of every session:
 Checkpoint date: 2026-09-09.
 
 - The repository is `hermes-affect`.
-- `cc3d31c` (`feat: harden durable state persistence`) is the current local
-  `main` commit and matches `origin/main`.
+- `38821b7` (`feat: add conservative state garbage collection`) is the current
+  local `main` commit and matches `origin/main`.
 - The compact seven-trait design is implemented: reactivity, persistence,
   pride, playfulness, assertiveness, social influence, and receptiveness, with
   independent expression/escalation/repair tuning.
@@ -32,10 +32,10 @@ Checkpoint date: 2026-09-09.
 - A local fake Hermes context now covers registration, lifecycle callbacks,
   state persistence, verified-admin command behavior, and affect-only command
   interventions; real Hermes payload compatibility is still unverified.
-- The durable-state restart, profile/session isolation, schema-version, and
-  command-intervention slices are committed. The working tree currently
-  contains conservative abandoned-state garbage collection with a 90-day
-  default and its documentation/tests.
+- The durable-state restart, profile/session isolation, schema-version,
+  command-intervention, and conservative 90-day garbage-collection slices are
+  committed. The working tree currently contains bounded transcript-free audit
+  records and their documentation/tests.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -43,8 +43,8 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the garbage-collection slice when requested, then confirm
-   the latest local commit passes a manually triggered
+1. Review and commit the audit slice when requested, then confirm the latest
+   local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
    contract against the target installation, currently documented as Hermes

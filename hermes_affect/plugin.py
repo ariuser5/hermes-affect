@@ -139,13 +139,19 @@ class AffectRuntime:
         speaker_id = str(kwargs.get("sender_id") or "user:unknown")
         speaker_kind = str(kwargs.get("sender_kind") or "unknown")
         verified_user = bool(kwargs.get("verified_user", False))
+        audit_entries: list[
+            tuple[Any, str, dict[str, dict[str, float]], dict[str, dict[str, float]]]
+        ] = []
         for event in self.classifier.classify(
             message,
             speaker_id=speaker_id,
             speaker_kind=speaker_kind,
             verified_user=verified_user,
         ):
+            before = self._audit_snapshot(state, event.speaker_id)
             rule = apply_event(state, event, self.config)
+            after = self._audit_snapshot(state, event.speaker_id)
+            audit_entries.append((event, rule, before, after))
             logger.info(
                 "event=%s speaker=%s rule=%s posture_before=%s",
                 event.event_type,
@@ -154,6 +160,17 @@ class AffectRuntime:
                 state.response_posture,
             )
         state.response_posture = derive_posture(state, self.config).value
+        for event, rule, before, after in audit_entries:
+            state.add_audit_record(
+                {
+                    "timestamp": utc_now(),
+                    "event_type": event.event_type.value,
+                    "speaker_id": event.speaker_id,
+                    "rule_name": rule,
+                    "posture": state.response_posture,
+                    "affected": self._audit_changes(before, after),
+                }
+            )
         state.mood = self._mood(state)
         state.updated_at = utc_now()
         state.revision += 1
@@ -224,6 +241,42 @@ class AffectRuntime:
         sender_id = str(kwargs.get("sender_id") or "")
         configured = _config_value(self.ctx, "admin_user_ids", [])
         return sender_id in {str(item) for item in configured} and bool(sender_id)
+
+    @staticmethod
+    def _audit_snapshot(
+        state: AffectState, participant_id: str
+    ) -> dict[str, dict[str, float]]:
+        relation = state.relationships.get(participant_id)
+        return {
+            "global": {
+                "valence": state.valence,
+                "arousal": state.arousal,
+                "frustration": state.frustration,
+                "offended": state.offended,
+            },
+            "relationship": {
+                "trust": relation.trust if relation else 0.0,
+                "affinity": relation.affinity if relation else 0.0,
+                "irritation": relation.irritation if relation else 0.0,
+                "respect": relation.respect if relation else 0.0,
+                "unresolved_tension": relation.unresolved_tension if relation else 0.0,
+            },
+        }
+
+    @staticmethod
+    def _audit_changes(
+        before: dict[str, dict[str, float]], after: dict[str, dict[str, float]]
+    ) -> dict[str, dict[str, dict[str, float]]]:
+        changed: dict[str, dict[str, dict[str, float]]] = {}
+        for group, values in before.items():
+            group_changes = {
+                name: {"before": value, "after": after[group][name]}
+                for name, value in values.items()
+                if value != after[group][name]
+            }
+            if group_changes:
+                changed[group] = group_changes
+        return changed
 
     @staticmethod
     def _mood(state: AffectState) -> str:

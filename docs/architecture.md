@@ -9,8 +9,10 @@ plus atomic replacement. Runtime state is not source code and must not be
 committed.
 
 The state contains bounded global affect, participant-specific relationships,
-open conflict metadata, posture, revision information, and the last processed
-turn identifier. It never stores raw transcripts, long quotations, or hidden
+open conflict metadata, posture, bounded audit records, revision information,
+and the last processed turn identifier. Audit records contain event type, rule,
+posture, participant identifier, and changed dimensions with before/after
+values. The state never stores raw transcripts, long quotations, or hidden
 chain-of-thought.
 
 ## Lifecycle

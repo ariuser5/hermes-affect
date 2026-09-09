@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 STATE_SCHEMA_VERSION = 1
+AUDIT_RECORD_LIMIT = 64
 
 
 def utc_now() -> str:
@@ -69,6 +70,7 @@ class AffectState:
     active_sensitivities: list[str] = field(default_factory=list)
     open_conflicts: dict[str, dict[str, Any]] = field(default_factory=dict)
     observed_participants: dict[str, dict[str, Any]] = field(default_factory=dict)
+    audit_records: list[dict[str, Any]] = field(default_factory=list)
     response_posture: str = "normal_engagement"
     soul_sha256: str | None = None
     predisposition: dict[str, Any] = field(default_factory=dict)
@@ -107,6 +109,7 @@ class AffectState:
             "active_sensitivities": list(self.active_sensitivities),
             "open_conflicts": self.open_conflicts,
             "observed_participants": self.observed_participants,
+            "audit_records": [dict(item) for item in self.audit_records[-AUDIT_RECORD_LIMIT:]],
             "response_posture": self.response_posture,
             "soul_sha256": self.soul_sha256,
             "predisposition": self.predisposition,
@@ -117,6 +120,12 @@ class AffectState:
         schema_version = raw.get("schema_version", STATE_SCHEMA_VERSION)
         if isinstance(schema_version, bool) or schema_version != STATE_SCHEMA_VERSION:
             raise ValueError(f"Unsupported affect state schema version: {schema_version}")
+        audit_raw = raw.get("audit_records", [])
+        audit_records = (
+            [dict(item) for item in audit_raw if isinstance(item, Mapping)][-AUDIT_RECORD_LIMIT:]
+            if isinstance(audit_raw, list)
+            else []
+        )
         return cls(
             profile_id=str(raw["profile_id"]),
             session_id=str(raw["session_id"]),
@@ -136,7 +145,14 @@ class AffectState:
             active_sensitivities=list(raw.get("active_sensitivities", [])),
             open_conflicts=dict(raw.get("open_conflicts", {})),
             observed_participants=dict(raw.get("observed_participants", {})),
+            audit_records=audit_records,
             response_posture=str(raw.get("response_posture", "normal_engagement")),
             soul_sha256=raw.get("soul_sha256"),
             predisposition=dict(raw.get("predisposition", {})),
         )
+
+    def add_audit_record(self, record: Mapping[str, Any]) -> None:
+        """Append one bounded, non-transcript audit record."""
+
+        self.audit_records.append(dict(record))
+        del self.audit_records[:-AUDIT_RECORD_LIMIT]

@@ -113,7 +113,7 @@ Acceptance criteria:
 - [x] Activate topic sensitivities without adding another core trait.
 - [x] Allow rapid escalation, lingering tension, and reconciliation.
 - [x] Add active sensitivity activation and topic matching.
-- [ ] Add bounded audit records containing event type, affected dimensions,
+- [x] Add bounded audit records containing event type, affected dimensions,
   old/new values, posture, and rule name.
 - [ ] Add tests for repeated teasing, high-pride escalation, suppressed
   conflict, sudden reconciliation, and incompatible temperaments.

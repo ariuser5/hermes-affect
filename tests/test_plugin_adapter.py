@@ -71,6 +71,33 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_audit_records_are_bounded_and_transcript_free(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+            context.emit("on_session_start", **base)
+            for index in range(80):
+                context.emit(
+                    "pre_llm_call",
+                    **base,
+                    user_message="good job",
+                    turn_id=f"turn:{index}",
+                )
+
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            self.assertEqual(len(state.audit_records), 64)
+            self.assertEqual(state.audit_records[-1]["event_type"], "praise")
+            self.assertEqual(state.audit_records[-1]["rule_name"], "positive_social_signal")
+            self.assertIn("global", state.audit_records[-1]["affected"])
+            self.assertNotIn("good job", state_path.read_text(encoding="utf-8"))
+            self.assertNotIn("user_message", state_path.read_text(encoding="utf-8"))
+
     def test_command_requires_verified_admin_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])
