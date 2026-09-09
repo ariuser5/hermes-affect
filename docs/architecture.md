@@ -32,6 +32,10 @@ avoidance, guarded/evasive/refusal behavior, counterattack, and pass guidance
 through the internal context summary. Separate response-routing hooks are not
 assumed until the target Hermes version is verified.
 
+When `shadow_mode` is enabled, the plugin performs the same state, observation,
+and audit updates but returns no affective context to Hermes. This makes a
+test profile observable without changing model prompting.
+
 Compression lineage handling through `parent_session_id`, richer middleware,
 full retry idempotency, and coordinated group state remain follow-up work.
 

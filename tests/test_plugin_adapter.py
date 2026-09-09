@@ -71,6 +71,30 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_shadow_mode_updates_state_without_injecting_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary, shadow_mode=True)
+            register(context)
+            kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+                "user_message": "you are an idiot",
+                "turn_id": "turn:one",
+            }
+
+            context.emit("on_session_start", **kwargs)
+            first_result = context.emit("pre_llm_call", **kwargs)
+            duplicate_result = context.emit("pre_llm_call", **kwargs)
+
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            self.assertIsNone(first_result)
+            self.assertIsNone(duplicate_result)
+            self.assertEqual(state.revision, 1)
+            self.assertEqual(len(state.audit_records), 1)
+            self.assertEqual(state.last_turn_id, "turn:one")
+
     def test_accepts_profile_name_and_positional_command_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

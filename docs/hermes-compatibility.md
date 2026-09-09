@@ -27,8 +27,8 @@ fields:
 - turn identity: optional `turn_id`
 - message identity: optional `user_message`, `sender_id`, `sender_kind`, and
   `verified_user`
-- configuration overrides: `state_dir`, `soul_path`, `state_gc_days`, and
-  `admin_user_ids`
+- configuration overrides: `state_dir`, `soul_path`, `state_gc_days`,
+  `shadow_mode`, and `admin_user_ids`
 - command arguments: `args_raw`, `args`, or a positional first argument
 
 Lifecycle hooks are registered for `on_session_start`, `pre_llm_call`,

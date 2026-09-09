@@ -44,6 +44,14 @@ def _state_gc_days(ctx: Any) -> float:
     return float(configured)
 
 
+def _shadow_mode(ctx: Any) -> bool:
+    configured = _config_value(ctx, "shadow_mode", False)
+    if isinstance(configured, bool):
+        return configured
+    logger.warning("Invalid shadow_mode setting; using disabled mode")
+    return False
+
+
 class AffectRuntime:
     def __init__(self, ctx: Any) -> None:
         configured_root = _config_value(ctx, "state_dir", None)
@@ -53,6 +61,7 @@ class AffectRuntime:
             root = hermes_home / "affect-state"
         self.store = StateStore(root)
         self.state_gc_days = _state_gc_days(ctx)
+        self.shadow_mode = _shadow_mode(ctx)
         self.ctx = ctx
         self.classifier = EventClassifier()
         self.config = neutral_config()
@@ -121,7 +130,7 @@ class AffectRuntime:
             return None
         turn_id = kwargs.get("turn_id")
         if turn_id and state.last_turn_id == str(turn_id):
-            return self._context(state)
+            return None if self.shadow_mode else self._context(state)
 
         try:
             elapsed_hours = max(
@@ -180,6 +189,9 @@ class AffectRuntime:
         state.revision += 1
         state.last_turn_id = str(turn_id) if turn_id else state.last_turn_id
         self.store.save(state)
+        if self.shadow_mode:
+            logger.info("shadow_mode active; affect context injection suppressed")
+            return None
         return self._context(state)
 
     def post_llm_call(self, **kwargs: Any) -> None:

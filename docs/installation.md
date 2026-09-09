@@ -17,6 +17,10 @@ separate persistent directory, for example:
 <runtime-root>/hermes-affect/<profile-id>/sessions/<session-id>.json
 ```
 
+For a test profile, set the plugin's boolean `shadow_mode` setting to `true`.
+The plugin will update and persist affect state while suppressing affective
+context injection. Leave it disabled for normal context injection.
+
 The plugin performs abandoned-state cleanup on session startup. The default
 retention threshold is 90 days; override it with the numeric plugin setting
 `state_gc_days`. Cleanup skips the active session, malformed state files, and
