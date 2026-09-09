@@ -115,7 +115,7 @@ Acceptance criteria:
 - [x] Add active sensitivity activation and topic matching.
 - [x] Add bounded audit records containing event type, affected dimensions,
   old/new values, posture, and rule name.
-- [ ] Add tests for repeated teasing, high-pride escalation, suppressed
+- [x] Add tests for repeated teasing, high-pride escalation, suppressed
   conflict, sudden reconciliation, and incompatible temperaments.
 
 Acceptance criteria:

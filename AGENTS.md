@@ -19,7 +19,7 @@ At the start of every session:
 Checkpoint date: 2026-09-09.
 
 - The repository is `hermes-affect`.
-- `38821b7` (`feat: add conservative state garbage collection`) is the current
+- `b49264c` (`feat: add bounded affect audit records`) is the current
   local `main` commit and matches `origin/main`.
 - The compact seven-trait design is implemented: reactivity, persistence,
   pride, playfulness, assertiveness, social influence, and receptiveness, with
@@ -33,9 +33,10 @@ Checkpoint date: 2026-09-09.
   state persistence, verified-admin command behavior, and affect-only command
   interventions; real Hermes payload compatibility is still unverified.
 - The durable-state restart, profile/session isolation, schema-version,
-  command-intervention, and conservative 90-day garbage-collection slices are
-  committed. The working tree currently contains bounded transcript-free audit
-  records and their documentation/tests.
+  command-intervention, conservative 90-day garbage-collection, and bounded
+  transcript-free audit-record slices are committed. The working tree currently
+  contains the remaining Phase 4 dynamics/influence coverage tests and TODO
+  checkpoint update.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -43,8 +44,8 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the audit slice when requested, then confirm the latest
-   local commit passes a manually triggered
+1. Review and commit the Phase 4 dynamics/influence coverage slice when
+   requested, then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
    contract against the target installation, currently documented as Hermes

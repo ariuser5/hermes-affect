@@ -140,6 +140,83 @@ class DynamicsTests(unittest.TestCase):
             {ResponsePosture.GUARDED, ResponsePosture.COUNTERATTACK},
         )
 
+    def test_repeated_teasing_accumulates_relationship_tension(self) -> None:
+        config = replace(
+            neutral_config(),
+            traits={**neutral_config().traits, "playfulness": 0.0},
+        )
+        state = AffectState.initial("bot-a", "session-1")
+        teasing = AffectiveEvent(EventType.TEASING, "user:1")
+
+        apply_event(state, teasing, config)
+        first_tension = state.relationships["user:1"].unresolved_tension
+        apply_event(state, teasing, config)
+
+        self.assertGreater(state.relationships["user:1"].unresolved_tension, first_tension)
+        self.assertGreater(state.frustration, 0.0)
+
+    def test_high_pride_increases_escalation_from_the_same_insult(self) -> None:
+        proud_config = replace(
+            neutral_config(),
+            traits={**neutral_config().traits, "pride": 1.0},
+        )
+        easygoing_config = replace(
+            neutral_config(),
+            traits={**neutral_config().traits, "pride": 0.0},
+        )
+        proud_state = AffectState.initial("bot-a", "proud")
+        easygoing_state = AffectState.initial("bot-a", "easygoing")
+        insult = AffectiveEvent(EventType.INSULT, "user:1")
+
+        apply_event(proud_state, insult, proud_config)
+        apply_event(easygoing_state, insult, easygoing_config)
+
+        self.assertGreater(proud_state.offended, easygoing_state.offended)
+        self.assertGreater(
+            proud_state.relationships["user:1"].unresolved_tension,
+            easygoing_state.relationships["user:1"].unresolved_tension,
+        )
+
+    def test_expression_gain_suppresses_counterattack_without_erasing_conflict(self) -> None:
+        base = neutral_config()
+        suppressed = replace(
+            base,
+            traits={**base.traits, "assertiveness": 0.9},
+            tuning={**base.tuning, "escalation_gain": 2.0, "expression_gain": 0.5},
+        )
+        expressive = replace(
+            suppressed,
+            tuning={**suppressed.tuning, "expression_gain": 2.0},
+        )
+        suppressed_state = AffectState.initial("bot-a", "suppressed")
+        expressive_state = AffectState.initial("bot-a", "expressive")
+        insult = AffectiveEvent(
+            EventType.INSULT,
+            "user:1",
+            attributes={"severity": "severe"},
+        )
+
+        apply_event(suppressed_state, insult, suppressed)
+        apply_event(expressive_state, insult, expressive)
+
+        self.assertEqual(derive_posture(suppressed_state, suppressed), ResponsePosture.GUARDED)
+        self.assertEqual(
+            derive_posture(expressive_state, expressive), ResponsePosture.COUNTERATTACK
+        )
+        self.assertIn("user:1", suppressed_state.open_conflicts)
+
+    def test_reconciliation_can_clear_a_sudden_conflict(self) -> None:
+        config = neutral_config()
+        state = AffectState.initial("bot-a", "session-1")
+
+        apply_event(state, AffectiveEvent(EventType.INSULT, "user:1"), config)
+        frustrated = state.frustration
+        apply_event(state, AffectiveEvent(EventType.RECONCILIATION, "user:1"), config)
+
+        self.assertLess(state.frustration, frustrated)
+        self.assertLess(state.relationships["user:1"].unresolved_tension, 0.15)
+        self.assertNotIn("user:1", state.open_conflicts)
+
     def test_playfulness_changes_joke_interpretation(self) -> None:
         playful = replace(neutral_config(), traits={**neutral_config().traits, "playfulness": 1.0})
         serious = replace(neutral_config(), traits={**neutral_config().traits, "playfulness": 0.0})
@@ -217,6 +294,32 @@ class InfluenceTests(unittest.TestCase):
         )
         self.assertGreater(decision.calming, 0.2)
         self.assertLess(decision.conflict_risk, 0.5)
+
+    def test_incompatible_temperaments_raise_conflict_risk(self) -> None:
+        speaker = ParticipantTraits(assertiveness=0.9, social_influence=0.9)
+        compatible = evaluate_influence(
+            speaker,
+            ParticipantTraits(
+                reactivity=0.1,
+                pride=0.1,
+                receptiveness=0.9,
+                persistence=0.9,
+            ),
+            ParticipantRelation(trust=0.7, respect=0.8),
+        )
+        incompatible = evaluate_influence(
+            speaker,
+            ParticipantTraits(
+                reactivity=0.9,
+                pride=0.9,
+                receptiveness=0.1,
+                persistence=0.2,
+            ),
+            ParticipantRelation(trust=-0.4, respect=0.1),
+        )
+
+        self.assertGreater(incompatible.conflict_risk, compatible.conflict_risk)
+        self.assertLess(incompatible.calming, compatible.calming)
 
 
 class StorageTests(unittest.TestCase):
