@@ -174,10 +174,10 @@ Acceptance criteria:
 - [x] Implement `/affect heat`.
 - [ ] Define reviewed behavior for `/affect tune`.
 - [ ] Verify sender identity using Hermes-provided authenticated identity data.
-- [ ] Ensure bots cannot imitate verified-user administrative authority.
-- [ ] Add natural-language moderation tests for calm, stop, continue, and
+- [x] Ensure bots cannot imitate verified-user administrative authority.
+- [x] Add natural-language moderation tests for calm, stop, continue, and
   lower-tone interventions.
-- [ ] Add bot mediation and bot provocation tests.
+- [x] Add bot mediation and bot provocation tests.
 
 Acceptance criteria:
 

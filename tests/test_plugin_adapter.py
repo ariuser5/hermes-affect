@@ -241,8 +241,92 @@ class PluginAdapterTests(unittest.TestCase):
             allowed = context.invoke_command(
                 "affect", args_raw="status", sender_id="user:admin", **kwargs
             )
+            bot_denied = context.invoke_command(
+                "affect",
+                args_raw="status",
+                sender_id="user:admin",
+                sender_kind="bot",
+                **kwargs,
+            )
             self.assertEqual(denied, "Affect administration requires a verified user identity.")
+            self.assertEqual(bot_denied, "Affect administration requires a verified user identity.")
             self.assertIn("session=session:one", allowed)
+
+    def test_natural_moderation_changes_state_only_for_verified_user(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+            context.emit("on_session_start", **base)
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="you are an idiot",
+                turn_id="turn:one",
+            )
+            store_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            before = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="calm down",
+                verified_user=False,
+                turn_id="turn:two",
+            )
+            unverified = AffectState.from_dict(
+                json.loads(store_path.read_text(encoding="utf-8"))
+            )
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="calm down",
+                verified_user=True,
+                turn_id="turn:three",
+            )
+            verified = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+
+            self.assertAlmostEqual(unverified.frustration, before.frustration, places=5)
+            self.assertLess(verified.frustration, unverified.frustration)
+            self.assertEqual(verified.audit_records[-1]["rule_name"], "verified_user_calm")
+
+    def test_bot_mediation_and_provocation_change_affect_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+            }
+            context.emit("on_session_start", **base)
+            context.emit(
+                "pre_llm_call",
+                **base,
+                sender_id="bot:hostile",
+                sender_kind="bot",
+                user_message="provoke them",
+                turn_id="turn:one",
+            )
+            store_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            provoked = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+            context.emit(
+                "pre_llm_call",
+                **base,
+                sender_id="bot:helper",
+                sender_kind="bot",
+                user_message="mediate this",
+                turn_id="turn:two",
+            )
+            mediated = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+
+            self.assertIn("bot:hostile", provoked.open_conflicts)
+            self.assertEqual(provoked.audit_records[-1]["event_type"], "bot_provocation")
+            self.assertGreater(mediated.relationships["bot:helper"].respect, 0.0)
+            self.assertEqual(mediated.audit_records[-1]["event_type"], "bot_mediation")
 
     def test_reset_reinitializes_plugin_state_without_changing_session_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

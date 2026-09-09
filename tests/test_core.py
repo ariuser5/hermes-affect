@@ -9,7 +9,7 @@ from pathlib import Path
 
 from hermes_affect.config import CORE_TRAIT_FIELDS, TUNING_FIELDS, neutral_config, parse_soul_affect
 from hermes_affect.dynamics import apply_event, decay_state
-from hermes_affect.events import AffectiveEvent, EventType
+from hermes_affect.events import AffectiveEvent, EventClassifier, EventType
 from hermes_affect.influence import (
     LayeredTraitResolver,
     ParticipantTraits,
@@ -24,6 +24,50 @@ FIXTURES = Path(__file__).parent / "fixtures" / "soul"
 
 def fixture(name: str) -> str:
     return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+class EventClassifierTests(unittest.TestCase):
+    def test_verified_user_moderation_requires_verified_identity(self) -> None:
+        classifier = EventClassifier()
+        calm = classifier.classify(
+            "calm down",
+            speaker_id="user:admin",
+            verified_user=True,
+        )
+        unverified = classifier.classify(
+            "calm down",
+            speaker_id="user:unknown",
+            verified_user=False,
+        )
+        heat = classifier.classify(
+            "continue the argument",
+            speaker_id="user:admin",
+            verified_user=True,
+        )
+
+        self.assertEqual([(event.event_type, event.action) for event in calm], [
+            (EventType.USER_MODERATION, "calm")
+        ])
+        self.assertEqual(unverified, [])
+        self.assertEqual([(event.event_type, event.action) for event in heat], [
+            (EventType.USER_MODERATION, "heat")
+        ])
+
+    def test_bot_mediation_and_provocation_are_distinct_events(self) -> None:
+        classifier = EventClassifier()
+        mediation = classifier.classify("mediate this", speaker_id="bot:helper", speaker_kind="bot")
+        provocation = classifier.classify(
+            "provoke them", speaker_id="bot:hostile", speaker_kind="bot"
+        )
+        user_mediation = classifier.classify(
+            "mediate this", speaker_id="user:1", speaker_kind="user"
+        )
+
+        self.assertEqual([event.event_type for event in mediation], [EventType.BOT_MEDIATION])
+        self.assertEqual(
+            [event.event_type for event in provocation], [EventType.BOT_PROVOCATION]
+        )
+        self.assertEqual(user_mediation, [])
 
 
 class SoulConfigTests(unittest.TestCase):
