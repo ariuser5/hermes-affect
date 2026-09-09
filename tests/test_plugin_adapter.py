@@ -131,6 +131,24 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.profile_id, "bot:environment")
             self.assertEqual(state.predisposition["traits"]["pride"], 0.85)
 
+    def test_environment_state_dir_is_used_without_context_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            state_dir = Path(temporary) / "environment-state"
+            with patch.dict(
+                os.environ,
+                {
+                    "HERMES_AFFECT_STATE_DIR": str(state_dir),
+                    "HERMES_PROFILE": "bot:environment",
+                },
+                clear=False,
+            ):
+                context = FakeHermesContext()
+                register(context)
+                context.emit("on_session_start", session_id="session:one")
+
+            state_path = state_dir / "bot_environment" / "sessions" / "session_one.json"
+            self.assertTrue(state_path.exists())
+
     def test_compression_continues_parent_affect_without_mutating_parent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)

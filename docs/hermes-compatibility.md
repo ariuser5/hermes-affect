@@ -53,6 +53,8 @@ has no configured override. The target Hermes profile-home and effective
 Environment fallback tests also cover `HERMES_HOME/SOUL.md` and
 `HERMES_PROFILE`; these validate the adapter's local defaults, not the target
 runtime's actual environment values.
+The runtime directory also falls back to `HERMES_AFFECT_STATE_DIR` when the
+context does not provide `state_dir`.
 
 ## Not yet verified against the target runtime
 
