@@ -46,7 +46,9 @@ that the target Hermes version uses either spelling.
 
 `session_id` is the state-creation boundary: when it is absent, lifecycle and
 model hooks return without loading or creating affect state, and an
-administrative command reports that no active session was supplied.
+administrative command reports that no active session was supplied. Local tests
+exercise this behavior across startup, model, checkpoint, reset, finalize, and
+end hooks.
 The local fixture also covers a callback-provided `soul_path` when the context
 has no configured override. The target Hermes profile-home and effective
 `SOUL.md` discovery rules still require deployment verification.

@@ -458,6 +458,10 @@ class PluginAdapterTests(unittest.TestCase):
 
             context.emit("on_session_start", **payload)
             result = context.emit("pre_llm_call", **payload)
+            context.emit("post_llm_call", **payload)
+            context.emit("on_session_reset", **payload)
+            context.emit("on_session_finalize", **payload)
+            context.emit("on_session_end", **payload)
             status = context.invoke_command(
                 "affect",
                 args_raw="status",
