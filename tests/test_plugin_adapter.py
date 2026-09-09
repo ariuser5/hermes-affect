@@ -215,6 +215,57 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.revision, 1)
             self.assertEqual(len(state.audit_records), 1)
 
+    def test_local_conservative_injection_covers_relationships_and_moderation(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            soul_path = Path(temporary) / "SOUL.md"
+            soul_path.write_text(
+                """session_affect:
+  schema_version: 1
+  tuning:
+    expression_gain: 1
+""",
+                encoding="utf-8",
+            )
+            context = FakeHermesContext(
+                state_dir=temporary,
+                soul_path=soul_path,
+                admin_user_ids=["user:admin"],
+            )
+            register(context)
+            base = {
+                "profile_id": "bot:test",
+                "session_id": "session:normal",
+                "sender_id": "user:1",
+            }
+
+            context.emit("on_session_start", **base)
+            injected = context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="you are an idiot",
+                turn_id="turn:insult",
+            )
+            state_path = Path(temporary) / "bot_test" / "sessions" / "session_normal.json"
+            before_calm = AffectState.from_dict(
+                json.loads(state_path.read_text(encoding="utf-8"))
+            )
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="calm down",
+                verified_user=True,
+                turn_id="turn:calm",
+            )
+            after_calm = AffectState.from_dict(
+                json.loads(state_path.read_text(encoding="utf-8"))
+            )
+
+            self.assertIsNotNone(injected)
+            self.assertIn("Internal affective guidance", injected["context"])
+            self.assertIn("user:1", before_calm.relationships)
+            self.assertLess(after_calm.frustration, before_calm.frustration)
+            self.assertEqual(after_calm.audit_records[-1]["rule_name"], "verified_user_calm")
+
     def test_accepts_profile_name_and_positional_command_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

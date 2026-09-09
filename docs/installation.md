@@ -32,6 +32,15 @@ python -m unittest \
 It verifies that shadow mode records bounded audit data, keeps response context
 suppressed, and exposes only coarse session status to an authenticated admin.
 
+After that passes, the conservative normal-injection smoke test verifies that
+`expression_gain: 1` produces internal guidance while relationships and a
+verified moderation intervention are still persisted:
+
+```bash
+python -m unittest \
+  tests.test_plugin_adapter.PluginAdapterTests.test_local_conservative_injection_covers_relationships_and_moderation
+```
+
 Expression strength is configured in the `session_affect.tuning` section of
 `SOUL.md` with `expression_gain` from `0` through `10`. A value of `0` keeps
 state updates enabled but suppresses affective context; the neutral default is

@@ -206,8 +206,9 @@ Acceptance criteria:
 
 - [x] Run one local fake-Hermes test profile in shadow mode.
 - [x] Inspect its administrative state/audit output.
-- [ ] Enable normal injection with a conservative test expression gain.
-- [ ] Validate user relationships and moderation.
+- [x] Enable normal injection with a conservative test expression gain in the
+  local fake-Hermes flow.
+- [x] Validate user relationships and moderation in the local fake-Hermes flow.
 - [x] Simulate multiple bots entirely in unit tests.
 - [ ] Confirm persistent runtime path and permissions in the Docker deployment.
 - [ ] Run one real two-bot group only after single-bot behavior is stable.
