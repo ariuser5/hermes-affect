@@ -5,10 +5,11 @@ parts that still require inspection of the target Hermes installation.
 
 ## Target installation
 
-The current deployment target is documented as Hermes `0.20.2` with image tag
-`v2026.8.16`. The image digest and the running Pi version are not recorded in
-this source repository yet. Recording those values requires read-only access
-to the deployment environment.
+The current deployment target is Hermes `0.20.2` with image tag
+`v2026.8.16`. Read-only inspection of the running container recorded the
+immutable image digest as
+`sha256:f8f548d87d16634d1ad9e3777280f3f577ba2358703f04e18e74007ffd3621bf`.
+The target is an ARM64 Raspberry Pi deployment.
 
 ## Locally covered public surface
 
@@ -61,18 +62,34 @@ context `state_dir` takes precedence over that environment fallback.
 An incomplete session-start payload also skips both state initialization and
 garbage collection, so it cannot clean up unrelated sessions accidentally.
 
+## Target-verified public surface
+
+Source inspection of the running Hermes `0.20.2` installation confirms that
+the general plugin manager exposes `register_hook()` and `register_command()`.
+Lifecycle dispatch invokes callbacks with keyword arguments and passes the
+complete payload to callbacks that accept `**kwargs`.
+
+The target `pre_llm_call` payload includes `session_id`, `task_id`, `turn_id`,
+`user_message`, `conversation_history`, `is_first_turn`, `model`, `platform`,
+`parent_session_id`, and `sender_id`. Hermes inserts returned plugin context
+into the user message rather than the system prompt.
+
+The target command contract is `handler(raw_args: str) -> str | None`; the
+registered command name is normalized before dispatch. The adapter's existing
+positional command test covers this calling convention.
+
 ## Not yet verified against the target runtime
 
 The following remain deployment compatibility checks rather than assumptions
 that should be hidden in the adapter:
 
-- the exact Hermes hook payload names and callback timing;
+- the exact payloads and callback timing for lifecycle hooks other than
+  `pre_llm_call`;
 - the authenticated sender identity field and how bot-originated messages are
   marked;
-- the command callback argument shape supplied by `ctx.register_command()`;
 - profile-home discovery and the effective `SOUL.md` location;
 - whether compression exposes `parent_session_id` and on which hook;
-- the image digest and running Hermes version.
+- whether injected context is retained in session/API history.
 
 ## Target verification worksheet
 
@@ -81,12 +98,12 @@ deployment's normal read-only inspection procedure. Keep deployment-specific
 paths, credentials, and runtime state outside this source repository.
 
 ```text
-target image reference:
-target image digest:
-running Hermes version:
-registration method and result:
-observed hook names and callback timing:
-observed command callback arguments:
+target image reference: nousresearch/hermes-agent:v2026.8.16
+target image digest: sha256:f8f548d87d16634d1ad9e3777280f3f577ba2358703f04e18e74007ffd3621bf
+running Hermes version: 0.20.2
+registration method and result: register_hook() and register_command() exposed by the general plugin manager
+observed hook names and callback timing: pre_llm_call is dispatched with keyword payloads before the model request
+observed command callback arguments: handler(raw_args: str) -> str | None
 effective profile-home and SOUL.md path:
 compression hook and parent_session_id behavior:
 evidence location or command output summary:
