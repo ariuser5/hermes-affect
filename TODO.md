@@ -45,7 +45,7 @@ Acceptance criteria:
 - [x] Record the target image tag and digest used by the Docker deployment.
 - [x] Record the running Hermes version from the Pi using read-only commands.
 - [x] Verify the target version's general-plugin registration contract.
-- [ ] Verify callback payloads for `pre_llm_call`, `post_llm_call`,
+- [x] Verify callback payloads for `pre_llm_call`, `post_llm_call`,
   `on_session_start`, `on_session_end`, `on_session_finalize`, and
   `on_session_reset`.
 - [x] Verify `ctx.register_command()` callback arguments.

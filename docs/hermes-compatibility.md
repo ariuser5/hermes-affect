@@ -84,6 +84,21 @@ profile reads `<HERMES_HOME>/profiles/<profile-name>/SOUL.md`. The plugin should
 therefore receive or derive the active profile home rather than assuming that
 the process-wide Hermes home is always the effective SOUL location.
 
+The target lifecycle payloads are also verified:
+
+- `on_session_start` fires for a new session with `session_id`, `model`, and
+  `platform`.
+- `post_llm_call` fires after a non-interrupted final response with session,
+  task, turn, user-message, assistant-response, history, model, and platform
+  fields.
+- `on_session_end` fires at the end of each conversation run with session,
+  task, turn, completion, failure, interruption, exit-reason, model, and
+  platform fields.
+- `on_session_reset` fires for `/new` with the old/new session IDs, platform,
+  and reset reason.
+- `on_session_finalize` accepts `session_id`, `platform`, `reason`, and
+  optional extra keyword fields.
+
 The target command contract is `handler(raw_args: str) -> str | None`; the
 registered command name is normalized before dispatch. The adapter's existing
 positional command test covers this calling convention.
@@ -93,8 +108,6 @@ positional command test covers this calling convention.
 The following remain deployment compatibility checks rather than assumptions
 that should be hidden in the adapter:
 
-- the exact payloads and callback timing for lifecycle hooks other than
-  `pre_llm_call`;
 - the authenticated sender identity field and how bot-originated messages are
   marked;
 - profile-home discovery and the effective `SOUL.md` location;
@@ -113,7 +126,7 @@ target image digest: sha256:f8f548d87d16634d1ad9e3777280f3f577ba2358703f04e18e74
 running Hermes version: 0.20.2
 container Hermes home: /opt/data (from HERMES_HOME)
 registration method and result: register_hook() and register_command() exposed by the general plugin manager
-observed hook names and callback timing: pre_llm_call is dispatched with keyword payloads before the model request
+observed hook names and callback timing: lifecycle hooks are dispatched with keyword payloads at the documented session and turn boundaries
 observed command callback arguments: handler(raw_args: str) -> str | None
 effective profile-home and SOUL.md path: default <HERMES_HOME>/SOUL.md; named <HERMES_HOME>/profiles/<profile-name>/SOUL.md
 compression hook and parent_session_id behavior:

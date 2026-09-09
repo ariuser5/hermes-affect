@@ -32,9 +32,9 @@ Checkpoint date: 2026-09-09.
 - A local fake Hermes context now covers registration, lifecycle callbacks,
   state persistence, verified-admin command behavior, and affect-only command
   interventions. Target source inspection verifies general registration,
-  keyword hook dispatch, the `pre_llm_call` payload, and the raw-string
-  command callback contract; the remaining lifecycle and deployment checks are
-  still unverified.
+  keyword hook dispatch, the lifecycle payloads, the `pre_llm_call` payload,
+  and the raw-string command callback contract; the remaining deployment
+  checks are still unverified.
 - The durable-state restart, profile/session isolation, schema-version,
   command-intervention, conservative 90-day garbage-collection, bounded
   transcript-free audit-record, Phase 4 dynamics/influence coverage, Phase 1

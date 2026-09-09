@@ -75,6 +75,72 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_accepts_target_hermes_lifecycle_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+
+            context.emit(
+                "on_session_start",
+                session_id="session:one",
+                model="test-model",
+                platform="discord",
+            )
+            context.emit(
+                "pre_llm_call",
+                session_id="session:one",
+                task_id="task:one",
+                turn_id="turn:one",
+                user_message="hello",
+                conversation_history=[],
+                is_first_turn=True,
+                model="test-model",
+                platform="discord",
+                parent_session_id="",
+                sender_id="user:one",
+            )
+            context.emit(
+                "post_llm_call",
+                session_id="session:one",
+                task_id="task:one",
+                turn_id="turn:one",
+                user_message="hello",
+                assistant_response="hi",
+                conversation_history=[],
+                model="test-model",
+                platform="discord",
+            )
+            context.emit(
+                "on_session_end",
+                session_id="session:one",
+                task_id="task:one",
+                turn_id="turn:one",
+                completed=True,
+                failed=False,
+                interrupted=False,
+                turn_exit_reason="completed",
+                model="test-model",
+                platform="discord",
+            )
+            context.emit(
+                "on_session_reset",
+                session_id="session:two",
+                platform="discord",
+                reason="new_session",
+                old_session_id="session:one",
+                new_session_id="session:two",
+            )
+            context.emit(
+                "on_session_finalize",
+                session_id="session:two",
+                platform="discord",
+                reason="session_expired",
+            )
+
+            self.assertTrue(
+                (Path(temporary) / "default" / "sessions" / "session_two.json").exists()
+            )
+
     def test_restart_does_not_replace_existing_soul_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             soul_path = Path(temporary) / "SOUL.md"
