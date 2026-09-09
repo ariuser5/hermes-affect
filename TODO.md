@@ -192,7 +192,7 @@ Acceptance criteria:
   compression.
 - [x] Add duplicate `turn_id` tests for retries and repeated hook delivery.
 - [x] Add successful-turn checkpoint tests.
-- [ ] Document incomplete retry/crash idempotency as an MVP limitation.
+- [x] Document incomplete retry/crash idempotency as an MVP limitation.
 - [x] Add lifecycle tests for process restart, `/reset`, `/new`, finalization,
   and compression continuation.
 

@@ -20,6 +20,13 @@ Atomic replacement prevents a normal interrupted write from leaving a partial
 state file. Malformed state files are skipped and should be reviewed through
 administrative logs rather than deleted automatically.
 
+Duplicate delivery is guarded by the persisted `last_turn_id` after a
+successful checkpoint. This is not full crash-safe exactly-once processing: a
+process failure between event application and the durable checkpoint can allow
+Hermes to redeliver the turn and the event to be applied again. The MVP keeps
+this limitation explicit rather than pretending that the file lock closes the
+transactional window.
+
 Dynamic context returned from `pre_llm_call` may be represented in Hermes
 session/API history depending on the installed Hermes version. The injected
 summary is therefore deliberately short and never contains the complete JSON

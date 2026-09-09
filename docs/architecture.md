@@ -59,6 +59,18 @@ clones the bounded parent snapshot and records the lineage while leaving the
 parent file unchanged. Richer middleware, full retry idempotency, and
 coordinated group state remain follow-up work.
 
+### Retry and crash boundary
+
+The `last_turn_id` guard prevents a repeated hook delivery from applying the
+same turn twice after its state has been saved. State writes use a lock and
+atomic replacement, so a normal interrupted write does not leave a partial JSON
+file. The MVP does not, however, provide transactional exactly-once handling:
+if the process crashes after applying an event but before the checkpoint is
+durable, Hermes may redeliver that turn and the event may be applied again.
+Closing that window requires a durable event/inbox record or an equivalent
+Hermes transaction boundary and is intentionally deferred until the target
+retry semantics are verified.
+
 ## Core temperament model
 
 The stable configuration has seven independent traits, each in the inclusive
