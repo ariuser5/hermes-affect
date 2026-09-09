@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from hermes_affect.models import AffectState
 from hermes_affect.plugin import register
@@ -97,6 +99,37 @@ class PluginAdapterTests(unittest.TestCase):
             state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.9)
             self.assertEqual(len(state.soul_sha256 or ""), 64)
+
+    def test_environment_defaults_provide_profile_and_soul_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            hermes_home = Path(temporary) / "hermes-home"
+            state_dir = Path(temporary) / "state"
+            hermes_home.mkdir()
+            (hermes_home / "SOUL.md").write_text(
+                """session_affect:
+  schema_version: 1
+  traits:
+    pride: 0.85
+""",
+                encoding="utf-8",
+            )
+
+            with patch.dict(
+                os.environ,
+                {
+                    "HERMES_HOME": str(hermes_home),
+                    "HERMES_PROFILE": "bot:environment",
+                },
+                clear=False,
+            ):
+                context = FakeHermesContext(state_dir=state_dir)
+                register(context)
+                context.emit("on_session_start", session_id="session:one")
+
+            state_path = state_dir / "bot_environment" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            self.assertEqual(state.profile_id, "bot:environment")
+            self.assertEqual(state.predisposition["traits"]["pride"], 0.85)
 
     def test_compression_continues_parent_affect_without_mutating_parent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

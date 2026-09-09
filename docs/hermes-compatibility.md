@@ -50,6 +50,9 @@ administrative command reports that no active session was supplied.
 The local fixture also covers a callback-provided `soul_path` when the context
 has no configured override. The target Hermes profile-home and effective
 `SOUL.md` discovery rules still require deployment verification.
+Environment fallback tests also cover `HERMES_HOME/SOUL.md` and
+`HERMES_PROFILE`; these validate the adapter's local defaults, not the target
+runtime's actual environment values.
 
 ## Not yet verified against the target runtime
 
