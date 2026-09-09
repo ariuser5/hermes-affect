@@ -149,6 +149,26 @@ class PluginAdapterTests(unittest.TestCase):
             state_path = state_dir / "bot_environment" / "sessions" / "session_one.json"
             self.assertTrue(state_path.exists())
 
+    def test_context_state_dir_precedes_environment_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            environment_dir = Path(temporary) / "environment-state"
+            context_dir = Path(temporary) / "context-state"
+            with patch.dict(
+                os.environ,
+                {
+                    "HERMES_AFFECT_STATE_DIR": str(environment_dir),
+                    "HERMES_PROFILE": "bot:environment",
+                },
+                clear=False,
+            ):
+                context = FakeHermesContext(state_dir=context_dir)
+                register(context)
+                context.emit("on_session_start", session_id="session:one")
+
+            context_path = context_dir / "bot_environment" / "sessions" / "session_one.json"
+            self.assertTrue(context_path.exists())
+            self.assertEqual(list(environment_dir.rglob("*.json")), [])
+
     def test_compression_continues_parent_affect_without_mutating_parent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)

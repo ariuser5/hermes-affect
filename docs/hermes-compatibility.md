@@ -54,7 +54,8 @@ Environment fallback tests also cover `HERMES_HOME/SOUL.md` and
 `HERMES_PROFILE`; these validate the adapter's local defaults, not the target
 runtime's actual environment values.
 The runtime directory also falls back to `HERMES_AFFECT_STATE_DIR` when the
-context does not provide `state_dir`.
+context does not provide `state_dir`; local tests also verify that an explicit
+context `state_dir` takes precedence over that environment fallback.
 
 ## Not yet verified against the target runtime
 

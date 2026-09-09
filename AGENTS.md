@@ -19,7 +19,7 @@ At the start of every session:
 Checkpoint date: 2026-09-09.
 
 - The repository is `hermes-affect`.
-- `c14a1c4` (`test: cover environment-based Hermes defaults`) is the current
+- `d38b7ce` (`test: cover environment state directory fallback`) is the current
   local `main` commit and matches `origin/main`.
 - The compact seven-trait design is implemented: reactivity, persistence,
   pride, playfulness, assertiveness, social influence, and receptiveness, with
@@ -39,7 +39,7 @@ Checkpoint date: 2026-09-09.
   Phase 7 intervention/tuning, Phase 8 compression/lifecycle, and the Phase 8
   retry-boundary documentation, Phase 9 rollout smoke tests, and the Phase 6
   privacy-hardening and Phase 9 rollback-documentation slices are committed.
-  The working tree contains the current runtime-state environment fallback
+  The working tree contains the current runtime-state configuration precedence
   fixture changes.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
@@ -48,7 +48,7 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the current runtime-state environment fallback slice when
+1. Review and commit the current runtime-state configuration precedence slice when
    requested, then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
