@@ -136,7 +136,7 @@ Acceptance criteria:
 - [x] Persist observed participant style and influence estimates.
 - [x] Add tests for respected leaders, low-receptive resistance, leadership
   challenges, bot-to-bot conflict, and bot-to-user relationships.
-- [ ] Document a future limited public temperament signature.
+- [x] Document a future limited public temperament signature.
 - [ ] Do not implement shared mutable group atmosphere in the MVP.
 
 Acceptance criteria:

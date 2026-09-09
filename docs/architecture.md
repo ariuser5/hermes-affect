@@ -66,6 +66,18 @@ The resolver is deliberately local and has no shared mutable group state.
 Public signatures should remain limited to non-sensitive traits such as
 playfulness, assertiveness, and social influence.
 
+### Future public temperament signature
+
+The future public signature is intentionally narrower than the private
+configuration. It may expose only an explicit signature version and coarse
+categories for `playfulness`, `assertiveness`, and `social_influence`. It must
+be opt-in, self-declared or administrator-reviewed, and treated as descriptive
+context rather than permission or authority. It must not expose pride,
+reactivity, persistence, receptiveness, current mood, relationship history,
+conflict state, observed-style estimates, or audit records. Automatic
+publication and automatic LLM-generated calibration are out of scope until a
+human review flow exists.
+
 The policy returns inspectable factors plus persuasion, calming, and
 conflict-risk decisions. An influential bot can calm a receptive participant;
 a low-receptive participant can resist; a proud bot can challenge a leader; a

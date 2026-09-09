@@ -28,3 +28,8 @@ state.
 Administrative status/debug output is separate from normal response context.
 Administrative commands must verify the configured user identity. A bot's
 message is social influence, not administrative authority.
+
+Any future public temperament signature must be opt-in and limited to coarse,
+reviewed categories for playfulness, assertiveness, and social influence. It
+must never publish private affect, relationship history, observed participant
+style, influence estimates, or audit records.
