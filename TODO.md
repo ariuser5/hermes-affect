@@ -49,10 +49,12 @@ Acceptance criteria:
   `on_session_start`, `on_session_end`, `on_session_finalize`, and
   `on_session_reset`.
 - [x] Verify `ctx.register_command()` callback arguments.
-- [ ] Verify profile-home and `SOUL.md` discovery behavior.
+- [x] Verify profile-home and `SOUL.md` discovery behavior.
 - [ ] Verify how compression exposes `parent_session_id`.
 - [x] Add a fake Hermes context fixture covering the agreed callback shapes.
 - [x] Document the current adapter contract and any version-specific code.
+- [x] Record the target container's `HERMES_HOME` value without embedding a
+  deployment-specific host path.
 
 Acceptance criteria:
 

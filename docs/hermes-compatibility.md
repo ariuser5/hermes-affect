@@ -10,6 +10,10 @@ The current deployment target is Hermes `0.20.2` with image tag
 immutable image digest as
 `sha256:f8f548d87d16634d1ad9e3777280f3f577ba2358703f04e18e74007ffd3621bf`.
 The target is an ARM64 Raspberry Pi deployment.
+The running container sets `HERMES_HOME=/opt/data`; this is the container-side
+Hermes home, not a host or Compose path. The persistent deployment mount is
+therefore the relevant location to inspect for profiles, `SOUL.md`, plugins,
+and runtime state.
 
 ## Locally covered public surface
 
@@ -74,6 +78,12 @@ The target `pre_llm_call` payload includes `session_id`, `task_id`, `turn_id`,
 `parent_session_id`, and `sender_id`. Hermes inserts returned plugin context
 into the user message rather than the system prompt.
 
+Target source inspection also confirms that SOUL loading is scoped to the
+active agent home. The default profile reads `<HERMES_HOME>/SOUL.md`; a named
+profile reads `<HERMES_HOME>/profiles/<profile-name>/SOUL.md`. The plugin should
+therefore receive or derive the active profile home rather than assuming that
+the process-wide Hermes home is always the effective SOUL location.
+
 The target command contract is `handler(raw_args: str) -> str | None`; the
 registered command name is normalized before dispatch. The adapter's existing
 positional command test covers this calling convention.
@@ -101,10 +111,11 @@ paths, credentials, and runtime state outside this source repository.
 target image reference: nousresearch/hermes-agent:v2026.8.16
 target image digest: sha256:f8f548d87d16634d1ad9e3777280f3f577ba2358703f04e18e74007ffd3621bf
 running Hermes version: 0.20.2
+container Hermes home: /opt/data (from HERMES_HOME)
 registration method and result: register_hook() and register_command() exposed by the general plugin manager
 observed hook names and callback timing: pre_llm_call is dispatched with keyword payloads before the model request
 observed command callback arguments: handler(raw_args: str) -> str | None
-effective profile-home and SOUL.md path:
+effective profile-home and SOUL.md path: default <HERMES_HOME>/SOUL.md; named <HERMES_HOME>/profiles/<profile-name>/SOUL.md
 compression hook and parent_session_id behavior:
 evidence location or command output summary:
 ```
