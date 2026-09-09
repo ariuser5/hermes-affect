@@ -214,7 +214,7 @@ Acceptance criteria:
 - [ ] Confirm persistent runtime path and permissions in the Docker deployment.
 - [ ] Run one real two-bot group only after single-bot behavior is stable.
 - [ ] Pin the deployed plugin to an immutable commit.
-- [ ] Add rollback instructions for the plugin source and runtime state.
+- [x] Add rollback instructions for the plugin source and runtime state.
 
 Deployment gate:
 

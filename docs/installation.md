@@ -68,6 +68,30 @@ mount when ownership and backup boundaries are clear; otherwise use a separate
 Docker volume. Do not use `tmpfs` for production state because it is lost on
 container restart.
 
+## Pinning and rollback
+
+Install the plugin from a full immutable Git commit SHA, not from `main`, a
+mutable branch, or an unpinned moving tag. Record the active SHA alongside the
+deployment configuration so the source can be identified before an upgrade.
+
+Before upgrading, preserve both the active plugin SHA and a restricted backup
+of the runtime state directory. Source rollback and state rollback are separate
+operations:
+
+1. Restore the previous plugin commit through the deployment's normal install
+   or mount mechanism.
+2. Keep the runtime state directory unchanged initially and restart Hermes
+   through the normal deployment procedure.
+3. If the previous plugin cannot read the state because of a schema boundary,
+   stop and restore the matching state backup for that plugin version; do not
+   delete state files to make startup succeed.
+4. Start with `shadow_mode` enabled and inspect administrative status before
+   returning to normal context injection.
+
+Keep source and state backups access-controlled and outside Git. The repository
+does not perform deployment, restart Hermes, or restore runtime state
+automatically.
+
 The plugin does not change Hermes memory settings. It does not call the memory
 tool and does not write `MEMORY.md`, `USER.md`, skills, or external memory
 providers.
