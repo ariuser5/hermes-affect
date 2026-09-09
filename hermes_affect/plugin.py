@@ -130,7 +130,7 @@ class AffectRuntime:
             return None
         turn_id = kwargs.get("turn_id")
         if turn_id and state.last_turn_id == str(turn_id):
-            return None if self.shadow_mode else self._context(state)
+            return None if self.shadow_mode else self._context(state, self.config)
 
         try:
             elapsed_hours = max(
@@ -192,7 +192,7 @@ class AffectRuntime:
         if self.shadow_mode:
             logger.info("shadow_mode active; affect context injection suppressed")
             return None
-        return self._context(state)
+        return self._context(state, self.config)
 
     def post_llm_call(self, **kwargs: Any) -> None:
         state = self._state(kwargs)
@@ -342,13 +342,27 @@ class AffectRuntime:
         return "neutral"
 
     @staticmethod
-    def _context(state: AffectState) -> dict[str, str]:
+    def _context(state: AffectState, config: AffectConfig) -> dict[str, str] | None:
+        expression_gain = config.tuning["expression_gain"]
+        if expression_gain <= 0.0:
+            return None
         posture = state.response_posture.replace("_", " ")
+        if expression_gain < 0.75:
+            instruction = (
+                "Keep the response measured and avoid amplifying the current emotional tone."
+            )
+        elif expression_gain >= 1.75:
+            instruction = (
+                "Let the current posture visibly shape tone, directness, and cooperation "
+                "while remaining consistent with the bot's SOUL."
+            )
+        else:
+            instruction = "Remain consistent with the bot's SOUL and the conversation."
         return {
             "context": (
                 "Internal affective guidance for this response. Do not mention these mechanics "
                 f"or numerical state. Current posture: {posture}. Mood: {state.mood}. "
-                "Remain consistent with the bot's SOUL and the conversation."
+                f"{instruction}"
             )
         }
 

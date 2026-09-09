@@ -95,6 +95,36 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(len(state.audit_records), 1)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_expression_gain_controls_context_without_disabling_state_updates(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            soul_path = Path(temporary) / "SOUL.md"
+            soul_path.write_text(
+                """session_affect:
+  schema_version: 1
+  tuning:
+    expression_gain: 0
+""",
+                encoding="utf-8",
+            )
+            context = FakeHermesContext(state_dir=temporary, soul_path=soul_path)
+            register(context)
+            kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+                "user_message": "good job",
+                "turn_id": "turn:one",
+            }
+
+            context.emit("on_session_start", **kwargs)
+            result = context.emit("pre_llm_call", **kwargs)
+
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            self.assertIsNone(result)
+            self.assertEqual(state.revision, 1)
+            self.assertEqual(len(state.audit_records), 1)
+
     def test_accepts_profile_name_and_positional_command_arguments(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

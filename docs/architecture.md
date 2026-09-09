@@ -36,6 +36,12 @@ When `shadow_mode` is enabled, the plugin performs the same state, observation,
 and audit updates but returns no affective context to Hermes. This makes a
 test profile observable without changing model prompting.
 
+The `tuning.expression_gain` setting controls context expression separately
+from event escalation: zero suppresses affective context while retaining state
+updates, low values request restrained guidance, and high values make the
+current posture more explicit. Numerical state is never included in the
+injected text.
+
 Compression lineage handling through `parent_session_id`, richer middleware,
 full retry idempotency, and coordinated group state remain follow-up work.
 

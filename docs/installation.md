@@ -21,6 +21,11 @@ For a test profile, set the plugin's boolean `shadow_mode` setting to `true`.
 The plugin will update and persist affect state while suppressing affective
 context injection. Leave it disabled for normal context injection.
 
+Expression strength is configured in the `session_affect.tuning` section of
+`SOUL.md` with `expression_gain` from `0` through `10`. A value of `0` keeps
+state updates enabled but suppresses affective context; the neutral default is
+`1`.
+
 The plugin performs abandoned-state cleanup on session startup. The default
 retention threshold is 90 days; override it with the numeric plugin setting
 `state_gc_days`. Cleanup skips the active session, malformed state files, and

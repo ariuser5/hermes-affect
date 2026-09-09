@@ -154,7 +154,7 @@ Acceptance criteria:
 - [x] Add evasive, topic-avoidance, refusal, counterattack, mediation, topic
   steering, and `pass` behaviors where the Hermes surface supports them.
 - [x] Add shadow mode that updates/logs state without injecting context.
-- [ ] Add configurable expression strength.
+- [x] Add configurable expression strength.
 - [ ] Confirm whether injected context appears in session/API history for the
   target Hermes version.
 - [ ] Evaluate request middleware as a later privacy-hardening option.
