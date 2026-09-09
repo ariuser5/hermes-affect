@@ -313,6 +313,39 @@ class PluginAdapterTests(unittest.TestCase):
                 (Path(temporary) / "bot_one" / "sessions" / "session_one.json").exists()
             )
 
+    def test_accepts_args_and_replacement_session_id_aliases(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])
+            register(context)
+            old_kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:old",
+            }
+            context.emit("on_session_start", **old_kwargs)
+
+            status = context.invoke_command(
+                "affect",
+                args="status",
+                sender_id="user:admin",
+                **old_kwargs,
+            )
+            context.emit(
+                "on_session_reset",
+                profile_id="bot:one",
+                session_id="session:old",
+                replacement_session_id="session:new",
+            )
+
+            old_path = Path(temporary) / "bot_one" / "sessions" / "session_old.json"
+            new_path = Path(temporary) / "bot_one" / "sessions" / "session_new.json"
+            self.assertIn("session=session:old", status)
+            self.assertTrue(old_path.exists())
+            self.assertTrue(new_path.exists())
+            self.assertNotEqual(
+                old_path.read_text(encoding="utf-8"),
+                new_path.read_text(encoding="utf-8"),
+            )
+
     def test_lifecycle_hooks_accept_payload_without_optional_fields(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)

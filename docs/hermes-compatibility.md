@@ -39,6 +39,10 @@ Lifecycle hooks are registered for `on_session_start`, `pre_llm_call`,
 The adapter has no private Hermes imports and does not require Hermes internals
 at import time. Missing optional fields use the documented neutral/default
 behavior; a missing `session_id` means no state is loaded or created.
+Local adapter tests exercise both command argument aliases (`args_raw` and
+`args`) and both reset replacement aliases (`new_session_id` and
+`replacement_session_id`). These are fixture coverage points, not confirmation
+that the target Hermes version uses either spelling.
 
 ## Not yet verified against the target runtime
 

@@ -38,8 +38,8 @@ Checkpoint date: 2026-09-09.
   compatibility-contract, Phase 2 configuration-safety, Phase 6 response,
   Phase 7 intervention/tuning, Phase 8 compression/lifecycle, and the Phase 8
   retry-boundary documentation, Phase 9 rollout smoke tests, and the Phase 6
-  privacy-hardening slice are committed. The working tree contains the current
-  Phase 9 rollback-documentation changes.
+  privacy-hardening and Phase 9 rollback-documentation slices are committed.
+  The working tree contains the current Phase 1 callback-alias fixture changes.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -47,7 +47,7 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the current Phase 9 rollback-documentation slice when
+1. Review and commit the current Phase 1 callback-alias fixture slice when
    requested, then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
