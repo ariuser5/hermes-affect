@@ -409,6 +409,55 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(reset, "Affective state reset for this session.")
             self.assertIn("Mood: neutral", state["context"])
 
+            reset_state = AffectState.from_dict(
+                json.loads(
+                    (Path(temporary) / "bot_one" / "sessions" / "session_one.json")
+                    .read_text(encoding="utf-8")
+                )
+            )
+            self.assertEqual(reset_state.session_id, "session:one")
+            self.assertEqual(reset_state.relationships, {})
+
+    def test_reset_hook_with_replacement_session_starts_fresh_affect_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            old_kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:old",
+                "sender_id": "user:1",
+            }
+            context.emit("on_session_start", **old_kwargs)
+            context.emit(
+                "pre_llm_call",
+                **old_kwargs,
+                user_message="you are an idiot",
+                turn_id="turn:old",
+            )
+            old_path = Path(temporary) / "bot_one" / "sessions" / "session_old.json"
+            old_before = AffectState.from_dict(
+                json.loads(old_path.read_text(encoding="utf-8"))
+            )
+
+            context.emit(
+                "on_session_reset",
+                profile_id="bot:one",
+                session_id="session:old",
+                new_session_id="session:new",
+            )
+            new_path = Path(temporary) / "bot_one" / "sessions" / "session_new.json"
+            new_state = AffectState.from_dict(
+                json.loads(new_path.read_text(encoding="utf-8"))
+            )
+            old_after = AffectState.from_dict(
+                json.loads(old_path.read_text(encoding="utf-8"))
+            )
+
+            self.assertEqual(new_state.session_id, "session:new")
+            self.assertEqual(new_state.frustration, 0.0)
+            self.assertEqual(new_state.relationships, {})
+            self.assertEqual(old_after.to_dict(), old_before.to_dict())
+
     def test_calm_and_heat_commands_change_only_plugin_affect(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

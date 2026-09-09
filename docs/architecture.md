@@ -23,8 +23,10 @@ chain-of-thought.
    deterministic events, applies interventions, derives posture, and injects a
    concise internal summary.
 4. `post_llm_call` checkpoints bounded state only.
-5. `on_session_reset` and a genuinely new Hermes session establish the relevant
-   boundary; `/affect reset` resets only plugin state.
+5. A reset hook with a replacement session ID initializes fresh plugin state;
+   `/affect reset` resets only the current plugin state without changing
+   Hermes session identity. A reset hook without a replacement ID is observed
+   and waits for the normal new-session callback.
 
 Response posture is derived from the latest clear event plus bounded current
 state. The MVP can express mediation, reconciliation, topic steering, topic

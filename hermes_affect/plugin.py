@@ -216,7 +216,20 @@ class AffectRuntime:
             self.store.save(state)
 
     def on_session_reset(self, **kwargs: Any) -> None:
-        # New-session initialization is intentionally separate from reset hooks.
+        replacement_session_id = kwargs.get("new_session_id") or kwargs.get(
+            "replacement_session_id"
+        )
+        if replacement_session_id:
+            new_session_kwargs = dict(kwargs)
+            new_session_kwargs["session_id"] = str(replacement_session_id)
+            new_session_kwargs.pop("parent_session_id", None)
+            self._state(new_session_kwargs)
+            logger.info(
+                "session reset established new affect session=%s",
+                replacement_session_id,
+            )
+            return
+        # Without a replacement ID, wait for the normal new-session callback.
         logger.info("session reset observed for session=%s", kwargs.get("session_id"))
 
     def on_session_finalize(self, **kwargs: Any) -> None:

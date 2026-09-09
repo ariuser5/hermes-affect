@@ -30,6 +30,7 @@ fields:
 - configuration overrides: `state_dir`, `soul_path`, `state_gc_days`,
   `shadow_mode`, and `admin_user_ids`
 - command arguments: `args_raw`, `args`, or a positional first argument
+- reset boundary: optional `new_session_id` or `replacement_session_id`
 
 Lifecycle hooks are registered for `on_session_start`, `pre_llm_call`,
 `post_llm_call`, `on_session_end`, `on_session_reset`, and
