@@ -74,6 +74,30 @@ that should be hidden in the adapter:
 - whether compression exposes `parent_session_id` and on which hook;
 - the image digest and running Hermes version.
 
+## Target verification worksheet
+
+Complete this worksheet from the target Hermes installation using the
+deployment's normal read-only inspection procedure. Keep deployment-specific
+paths, credentials, and runtime state outside this source repository.
+
+```text
+target image reference:
+target image digest:
+running Hermes version:
+registration method and result:
+observed hook names and callback timing:
+observed command callback arguments:
+effective profile-home and SOUL.md path:
+compression hook and parent_session_id behavior:
+evidence location or command output summary:
+```
+
+For each observed payload, record the exact field names and whether the value
+is absent, null, or an empty string. Compare those observations with the local
+fixture contract above before changing the adapter. Do not mark the related
+TODO items complete based only on this worksheet; they require evidence from
+the target runtime.
+
 Until those checks are completed, the fake context tests are contract fixtures,
 not proof of compatibility with a deployed Hermes process. No version-specific
 adapter branch is currently needed; any future branch should remain at the
