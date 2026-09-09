@@ -380,6 +380,51 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertGreater(mediated.relationships["bot:helper"].respect, 0.0)
             self.assertEqual(mediated.audit_records[-1]["event_type"], "bot_mediation")
 
+    def test_multiple_bot_profiles_keep_group_affect_state_isolated(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            bot_one = FakeHermesContext(state_dir=temporary)
+            bot_two = FakeHermesContext(state_dir=temporary)
+            register(bot_one)
+            register(bot_two)
+
+            bot_one_base = {"profile_id": "bot:one", "session_id": "group:one"}
+            bot_two_base = {"profile_id": "bot:two", "session_id": "group:one"}
+            bot_one.emit("on_session_start", **bot_one_base)
+            bot_two.emit("on_session_start", **bot_two_base)
+
+            bot_one.emit(
+                "pre_llm_call",
+                **bot_one_base,
+                sender_id="bot:two",
+                sender_kind="bot",
+                user_message="provoke them",
+                turn_id="bot-one-turn",
+            )
+            bot_two.emit(
+                "pre_llm_call",
+                **bot_two_base,
+                sender_id="bot:one",
+                sender_kind="bot",
+                user_message="mediate this",
+                turn_id="bot-two-turn",
+            )
+
+            bot_one_path = Path(temporary) / "bot_one" / "sessions" / "group_one.json"
+            bot_two_path = Path(temporary) / "bot_two" / "sessions" / "group_one.json"
+            bot_one_state = AffectState.from_dict(
+                json.loads(bot_one_path.read_text(encoding="utf-8"))
+            )
+            bot_two_state = AffectState.from_dict(
+                json.loads(bot_two_path.read_text(encoding="utf-8"))
+            )
+
+            self.assertIn("bot:two", bot_one_state.open_conflicts)
+            self.assertNotIn("bot:two", bot_two_state.open_conflicts)
+            self.assertEqual(bot_one_state.audit_records[-1]["event_type"], "bot_provocation")
+            self.assertEqual(bot_two_state.audit_records[-1]["event_type"], "bot_mediation")
+            self.assertIn("bot:one", bot_two_state.relationships)
+            self.assertNotIn("bot:one", bot_one_state.relationships)
+
     def test_reset_reinitializes_plugin_state_without_changing_session_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

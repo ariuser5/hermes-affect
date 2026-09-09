@@ -208,7 +208,7 @@ Acceptance criteria:
 - [ ] Inspect administrative state/audit output.
 - [ ] Enable normal injection with a conservative test expression gain.
 - [ ] Validate user relationships and moderation.
-- [ ] Simulate multiple bots entirely in unit tests.
+- [x] Simulate multiple bots entirely in unit tests.
 - [ ] Confirm persistent runtime path and permissions in the Docker deployment.
 - [ ] Run one real two-bot group only after single-bot behavior is stable.
 - [ ] Pin the deployed plugin to an immutable commit.
