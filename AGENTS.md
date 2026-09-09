@@ -19,7 +19,7 @@ At the start of every session:
 Checkpoint date: 2026-09-09.
 
 - The repository is `hermes-affect`.
-- `074db3a` (`docs: document retry and crash recovery boundary`) is the current
+- `ee532ed` (`test: simulate isolated affect across multiple bots`) is the current
   local `main` commit and matches `origin/main`.
 - The compact seven-trait design is implemented: reactivity, persistence,
   pride, playfulness, assertiveness, social influence, and receptiveness, with
@@ -37,8 +37,9 @@ Checkpoint date: 2026-09-09.
   transcript-free audit-record, Phase 4 dynamics/influence coverage, Phase 1
   compatibility-contract, Phase 2 configuration-safety, Phase 6 response,
   Phase 7 intervention/tuning, Phase 8 compression/lifecycle, and the Phase 8
-  retry-boundary documentation slices are committed. The working tree contains
-  the current Phase 9 multi-bot simulation test changes.
+  retry-boundary documentation, and Phase 9 multi-bot simulation slices are
+  committed. The working tree contains the current Phase 9 local shadow-rollout
+  smoke test and documentation changes.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -46,7 +47,7 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the current Phase 9 multi-bot simulation test slice when
+1. Review and commit the current Phase 9 local shadow-rollout slice when
    requested, then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility

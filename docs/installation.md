@@ -21,6 +21,17 @@ For a test profile, set the plugin's boolean `shadow_mode` setting to `true`.
 The plugin will update and persist affect state while suppressing affective
 context injection. Leave it disabled for normal context injection.
 
+The local fake-Hermes rollout smoke test exercises this operator flow without
+calling a real model:
+
+```bash
+python -m unittest \
+  tests.test_plugin_adapter.PluginAdapterTests.test_local_shadow_rollout_exposes_safe_status_and_audit_output
+```
+
+It verifies that shadow mode records bounded audit data, keeps response context
+suppressed, and exposes only coarse session status to an authenticated admin.
+
 Expression strength is configured in the `session_affect.tuning` section of
 `SOUL.md` with `expression_gain` from `0` through `10`. A value of `0` keeps
 state updates enabled but suppresses affective context; the neutral default is

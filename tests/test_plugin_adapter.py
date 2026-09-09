@@ -147,6 +147,44 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(len(state.audit_records), 1)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_local_shadow_rollout_exposes_safe_status_and_audit_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(
+                state_dir=temporary,
+                shadow_mode=True,
+                admin_user_ids=["user:admin"],
+            )
+            register(context)
+            base = {
+                "profile_id": "bot:test",
+                "session_id": "session:shadow",
+                "sender_id": "user:1",
+            }
+
+            context.emit("on_session_start", **base)
+            result = context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="you are an idiot",
+                turn_id="turn:one",
+            )
+            status = context.invoke_command(
+                "affect",
+                args_raw="status",
+                **{**base, "sender_id": "user:admin"},
+            )
+
+            state_path = Path(temporary) / "bot_test" / "sessions" / "session_shadow.json"
+            raw_state = state_path.read_text(encoding="utf-8")
+            state = AffectState.from_dict(json.loads(raw_state))
+
+            self.assertIsNone(result)
+            self.assertIn("session=session:shadow", status)
+            self.assertIn("revision=1", status)
+            self.assertEqual(state.audit_records[-1]["event_type"], "insult")
+            self.assertNotIn("you are an idiot", raw_state)
+            self.assertNotIn("frustration", status)
+
     def test_expression_gain_controls_context_without_disabling_state_updates(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             soul_path = Path(temporary) / "SOUL.md"

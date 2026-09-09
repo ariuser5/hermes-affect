@@ -204,8 +204,8 @@ Acceptance criteria:
 
 ## Phase 9 — rollout
 
-- [ ] Run one test profile in shadow mode.
-- [ ] Inspect administrative state/audit output.
+- [x] Run one local fake-Hermes test profile in shadow mode.
+- [x] Inspect its administrative state/audit output.
 - [ ] Enable normal injection with a conservative test expression gain.
 - [ ] Validate user relationships and moderation.
 - [x] Simulate multiple bots entirely in unit tests.
