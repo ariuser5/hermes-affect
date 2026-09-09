@@ -101,6 +101,13 @@ class AffectRuntime:
         profile_id = self._profile_id(kwargs)
         state = self.store.load(profile_id, str(session_id))
         if state is None:
+            parent_session_id = kwargs.get("parent_session_id")
+            if parent_session_id and str(parent_session_id) != str(session_id):
+                parent = self.store.load(profile_id, str(parent_session_id))
+                if parent is not None:
+                    state = AffectState.continued_from(parent, str(session_id))
+                    self.store.save(state)
+                    return state
             config, soul_hash = self._load_config(kwargs)
             state = AffectState.initial(
                 profile_id,

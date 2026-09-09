@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -78,6 +79,7 @@ class AffectState:
     soul_sha256: str | None = None
     predisposition: dict[str, Any] = field(default_factory=dict)
     tuning_overrides: dict[str, float] = field(default_factory=dict)
+    parent_session_id: str | None = None
 
     @classmethod
     def initial(
@@ -94,6 +96,17 @@ class AffectState:
             soul_sha256=soul_sha256,
             predisposition=dict(predisposition or {}),
         )
+
+    @classmethod
+    def continued_from(cls, parent: AffectState, session_id: str) -> AffectState:
+        """Start a compressed session from a bounded parent-state snapshot."""
+
+        state = copy.deepcopy(parent)
+        state.session_id = session_id
+        state.created_at = utc_now()
+        state.updated_at = utc_now()
+        state.parent_session_id = parent.session_id
+        return state
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -118,6 +131,7 @@ class AffectState:
             "soul_sha256": self.soul_sha256,
             "predisposition": self.predisposition,
             "tuning_overrides": dict(self.tuning_overrides),
+            "parent_session_id": self.parent_session_id,
         }
 
     @classmethod
@@ -167,6 +181,7 @@ class AffectState:
             soul_sha256=raw.get("soul_sha256"),
             predisposition=dict(raw.get("predisposition", {})),
             tuning_overrides=tuning_overrides,
+            parent_session_id=raw.get("parent_session_id"),
         )
 
     def add_audit_record(self, record: Mapping[str, Any]) -> None:

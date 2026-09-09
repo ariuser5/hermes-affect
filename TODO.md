@@ -188,10 +188,10 @@ Acceptance criteria:
 ## Phase 8 — lifecycle, compression, and recovery
 
 - [ ] Implement new-session initialization and affect-only reset semantics.
-- [ ] Preserve continuity when Hermes exposes `parent_session_id` after
+- [x] Preserve continuity when Hermes exposes `parent_session_id` after
   compression.
-- [ ] Add duplicate `turn_id` tests for retries and repeated hook delivery.
-- [ ] Add successful-turn checkpoint tests.
+- [x] Add duplicate `turn_id` tests for retries and repeated hook delivery.
+- [x] Add successful-turn checkpoint tests.
 - [ ] Document incomplete retry/crash idempotency as an MVP limitation.
 - [ ] Add lifecycle tests for process restart, `/reset`, `/new`, finalization,
   and compression continuation.

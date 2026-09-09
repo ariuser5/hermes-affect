@@ -59,17 +59,69 @@ class PluginAdapterTests(unittest.TestCase):
 
             context.emit("on_session_start", **kwargs)
             injected = context.emit("pre_llm_call", **kwargs)
+            duplicate = context.emit("pre_llm_call", **kwargs)
             context.emit("post_llm_call", **kwargs)
             context.emit("on_session_end", **kwargs)
 
             self.assertIn("context", injected)
             self.assertIn("Internal affective guidance", injected["context"])
+            self.assertIn("Internal affective guidance", duplicate["context"])
             state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
             self.assertTrue(state_path.exists())
             state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
             self.assertEqual(state.soul_sha256 and len(state.soul_sha256), 64)
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
+
+    def test_compression_continues_parent_affect_without_mutating_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            parent_kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:parent",
+                "sender_id": "user:1",
+            }
+            context.emit("on_session_start", **parent_kwargs)
+            context.emit(
+                "pre_llm_call",
+                **parent_kwargs,
+                user_message="you are an idiot",
+                turn_id="turn:parent",
+            )
+            parent_path = Path(temporary) / "bot_one" / "sessions" / "session_parent.json"
+            parent_before = AffectState.from_dict(
+                json.loads(parent_path.read_text(encoding="utf-8"))
+            )
+
+            compressed_kwargs = {
+                "profile_id": "bot:one",
+                "session_id": "session:compressed",
+                "parent_session_id": "session:parent",
+            }
+            context.emit("on_session_start", **compressed_kwargs)
+            compressed_path = (
+                Path(temporary) / "bot_one" / "sessions" / "session_compressed.json"
+            )
+            continued = AffectState.from_dict(
+                json.loads(compressed_path.read_text(encoding="utf-8"))
+            )
+
+            self.assertEqual(continued.parent_session_id, "session:parent")
+            self.assertEqual(continued.session_id, "session:compressed")
+            self.assertEqual(continued.frustration, parent_before.frustration)
+            self.assertIn("user:1", continued.open_conflicts)
+
+            context.emit(
+                "pre_llm_call",
+                **compressed_kwargs,
+                user_message="sorry, no hard feelings",
+                turn_id="turn:compressed",
+            )
+            parent_after = AffectState.from_dict(
+                json.loads(parent_path.read_text(encoding="utf-8"))
+            )
+            self.assertEqual(parent_after.to_dict(), parent_before.to_dict())
 
     def test_shadow_mode_updates_state_without_injecting_context(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
