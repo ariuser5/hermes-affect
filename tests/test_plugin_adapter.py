@@ -75,6 +75,44 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_restart_does_not_replace_existing_soul_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            soul_path = Path(temporary) / "SOUL.md"
+            soul_path.write_text(
+                """session_affect:
+  schema_version: 1
+  traits:
+    reactivity: 0.8
+""",
+                encoding="utf-8",
+            )
+            first_context = FakeHermesContext(state_dir=temporary, soul_path=soul_path)
+            register(first_context)
+            base = {"profile_id": "bot:one", "session_id": "session:one"}
+            first_context.emit("on_session_start", **base)
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            first_state = AffectState.from_dict(
+                json.loads(state_path.read_text(encoding="utf-8"))
+            )
+
+            soul_path.write_text(
+                """session_affect:
+  schema_version: 1
+  traits:
+    reactivity: 0.2
+""",
+                encoding="utf-8",
+            )
+            restarted_context = FakeHermesContext(state_dir=temporary, soul_path=soul_path)
+            register(restarted_context)
+            restarted_context.emit("on_session_start", **base)
+            restarted_state = AffectState.from_dict(
+                json.loads(state_path.read_text(encoding="utf-8"))
+            )
+
+            self.assertEqual(restarted_state.soul_sha256, first_state.soul_sha256)
+            self.assertEqual(restarted_state.predisposition, first_state.predisposition)
+
     def test_callback_soul_path_is_used_without_context_override(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             soul_path = Path(temporary) / "callback-SOUL.md"

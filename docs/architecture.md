@@ -28,6 +28,10 @@ chain-of-thought.
    Hermes session identity. A reset hook without a replacement ID is observed
    and waits for the normal new-session callback.
 
+An existing session keeps the SOUL hash and predisposition snapshot captured
+when it was created. Editing `SOUL.md` affects new sessions only; a process
+restart does not silently rewrite an existing session's initial configuration.
+
 SOUL configuration is parsed locally and deterministically during startup. Only
 the explicitly delimited `session_affect` YAML block can affect numeric
 configuration; free-form persona prose is not sent to an LLM and is never
