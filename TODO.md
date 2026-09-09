@@ -70,9 +70,9 @@ Acceptance criteria:
 - [x] Emit administrative warnings for invalid configuration.
 - [x] Store the SOUL SHA-256 hash and predisposition snapshot in session state.
 - [x] Add fixtures for missing, valid, partially specified, and invalid SOULs.
-- [ ] Confirm free-form SOUL prose is never sent to an LLM for configuration
+- [x] Confirm free-form SOUL prose is never sent to an LLM for configuration
   extraction during session startup.
-- [ ] Document the future calibration tool and its mandatory review step.
+- [x] Document the future calibration tool and its mandatory review step.
 
 Acceptance criteria:
 

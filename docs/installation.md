@@ -30,6 +30,12 @@ An administrator can temporarily override one of the three tuning values for
 the active plugin session with `/affect tune <field> <value>`. Only the three
 tuning fields are accepted; core traits and `SOUL.md` are not modified.
 
+The plugin reads numeric affect configuration only from the explicitly
+delimited `session_affect` YAML section in `SOUL.md`. It does not ask an LLM to
+extract settings from the surrounding persona prose. Any future calibration
+tool must produce a reviewable proposal and require administrator approval
+before changing configuration; automatic calibration is not enabled.
+
 The plugin performs abandoned-state cleanup on session startup. The default
 retention threshold is 90 days; override it with the numeric plugin setting
 `state_gc_days`. Cleanup skips the active session, malformed state files, and

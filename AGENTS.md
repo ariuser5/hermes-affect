@@ -19,7 +19,7 @@ At the start of every session:
 Checkpoint date: 2026-09-09.
 
 - The repository is `hermes-affect`.
-- `b49264c` (`feat: add bounded affect audit records`) is the current
+- `96ec261` (`feat: enforce affect session lifecycle boundaries`) is the current
   local `main` commit and matches `origin/main`.
 - The compact seven-trait design is implemented: reactivity, persistence,
   pride, playfulness, assertiveness, social influence, and receptiveness, with
@@ -34,9 +34,10 @@ Checkpoint date: 2026-09-09.
   interventions; real Hermes payload compatibility is still unverified.
 - The durable-state restart, profile/session isolation, schema-version,
   command-intervention, conservative 90-day garbage-collection, bounded
-  transcript-free audit-record, Phase 4 dynamics/influence coverage, and Phase
-  1 compatibility-contract slices are committed. The working tree currently
-  contains the Phase 8 session-boundary and lifecycle test changes.
+  transcript-free audit-record, Phase 4 dynamics/influence coverage, Phase 1
+  compatibility-contract, Phase 6 response, Phase 7 intervention/tuning, and
+  Phase 8 compression/lifecycle slices are committed. The working tree contains
+  the current Phase 2 configuration-safety documentation and test changes.
 - The previous GitHub failure came from rerunning old commit `0cf0657`; verify
   a fresh manual run from the current `main` branch before changing CI again.
 - `TODO.md` is the current planning file and now records the compact-trait
@@ -44,8 +45,8 @@ Checkpoint date: 2026-09-09.
 
 ## Immediate next work
 
-1. Review and commit the Phase 8 session-boundary/lifecycle slice when requested,
-   then confirm the latest local commit passes a manually triggered
+1. Review and commit the current Phase 2 configuration-safety slice when
+   requested, then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
 2. Continue with Phase 1 in `TODO.md`: freeze the Hermes compatibility
    contract against the target installation, currently documented as Hermes

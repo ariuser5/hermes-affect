@@ -28,6 +28,11 @@ chain-of-thought.
    Hermes session identity. A reset hook without a replacement ID is observed
    and waits for the normal new-session callback.
 
+SOUL configuration is parsed locally and deterministically during startup. Only
+the explicitly delimited `session_affect` YAML block can affect numeric
+configuration; free-form persona prose is not sent to an LLM and is never
+interpreted as configuration.
+
 Response posture is derived from the latest clear event plus bounded current
 state. The MVP can express mediation, reconciliation, topic steering, topic
 avoidance, guarded/evasive/refusal behavior, counterattack, and pass guidance
@@ -102,6 +107,14 @@ reactivity, persistence, receptiveness, current mood, relationship history,
 conflict state, observed-style estimates, or audit records. Automatic
 publication and automatic LLM-generated calibration are out of scope until a
 human review flow exists.
+
+### Future calibration tool
+
+A future calibration tool may produce a proposed, bounded `session_affect`
+patch from explicitly supplied aggregate observations. It must run offline or
+on demand, avoid raw transcripts, and never modify `SOUL.md` or runtime state
+automatically. An administrator must review the proposal and its privacy impact
+before applying it intentionally. No automatic calibration is part of the MVP.
 
 The policy returns inspectable factors plus persuasion, calming, and
 conflict-risk decisions. An influential bot can calm a receptive participant;

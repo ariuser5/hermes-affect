@@ -78,6 +78,15 @@ class SoulConfigTests(unittest.TestCase):
         self.assertTrue(all(value == 0.5 for value in config.traits.values()))
         self.assertEqual(dict(config.tuning), {name: 1.0 for name in TUNING_FIELDS})
 
+    def test_free_form_prose_is_not_interpreted_as_configuration(self) -> None:
+        config, warnings = parse_soul_affect(
+            "The bot is highly reactive and proud.\n"
+            "reactivity: 1.0\n"
+            "session_affect: is mentioned here as ordinary prose.\n"
+        )
+        self.assertEqual(warnings, [])
+        self.assertEqual(config.to_dict(), neutral_config().to_dict())
+
     def test_valid_section_preserves_seven_traits_and_sensitivities(self) -> None:
         config, warnings = parse_soul_affect(fixture("valid.md"))
         self.assertEqual(warnings, [])
