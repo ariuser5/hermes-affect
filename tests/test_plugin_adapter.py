@@ -73,6 +73,31 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state.predisposition["traits"]["reactivity"], 0.8)
             self.assertEqual(state.last_turn_id, "turn:one")
 
+    def test_callback_soul_path_is_used_without_context_override(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            soul_path = Path(temporary) / "callback-SOUL.md"
+            soul_path.write_text(
+                """session_affect:
+  schema_version: 1
+  traits:
+    reactivity: 0.9
+""",
+                encoding="utf-8",
+            )
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            context.emit(
+                "on_session_start",
+                profile_id="bot:one",
+                session_id="session:one",
+                soul_path=soul_path,
+            )
+
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            self.assertEqual(state.predisposition["traits"]["reactivity"], 0.9)
+            self.assertEqual(len(state.soul_sha256 or ""), 64)
+
     def test_compression_continues_parent_affect_without_mutating_parent(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)
