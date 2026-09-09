@@ -71,5 +71,9 @@ conflict-risk decisions. An influential bot can calm a receptive participant;
 a low-receptive participant can resist; a proud bot can challenge a leader; a
 playful influential participant can turn ambiguity into banter; and a serious
 participant can become irritated by the same joke. Social influence never
-grants administrative authority. Unknown configuration fields are warned about
-and ignored without changing recognized values.
+grants administrative authority. The runtime stores bounded, transcript-free
+style estimates (`supportive`, `playful`, `confrontational`, and `cooperative`)
+on each participant relationship, plus an exponentially smoothed influence
+estimate and observation count. These are local observations, not public
+temperament claims, and unknown configuration fields are warned about and
+ignored without changing recognized values.

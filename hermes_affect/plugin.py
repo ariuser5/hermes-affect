@@ -13,6 +13,7 @@ from typing import Any
 from .config import AffectConfig, neutral_config, parse_soul_affect
 from .dynamics import apply_event, decay_state
 from .events import EventClassifier
+from .influence import observe_style
 from .models import AffectState, utc_now
 from .posture import derive_posture
 from .storage import DEFAULT_ABANDONED_STATE_DAYS, StateStore
@@ -152,6 +153,7 @@ class AffectRuntime:
             rule = apply_event(state, event, self.config)
             after = self._audit_snapshot(state, event.speaker_id)
             audit_entries.append((event, rule, before, after))
+            self._record_observation(state, event, before, after)
             logger.info(
                 "event=%s speaker=%s rule=%s posture_before=%s",
                 event.event_type,
@@ -277,6 +279,43 @@ class AffectRuntime:
             if group_changes:
                 changed[group] = group_changes
         return changed
+
+    @staticmethod
+    def _record_observation(
+        state: AffectState,
+        event: Any,
+        before: dict[str, dict[str, float]],
+        after: dict[str, dict[str, float]],
+    ) -> None:
+        relation = state.relationships[event.speaker_id]
+        observe_style(relation, event.event_type)
+        changes = [
+            abs(after[group][name] - value)
+            for group, values in before.items()
+            for name, value in values.items()
+            if (after[group][name] - value) != 0
+        ]
+        effect_strength = min(1.0, sum(changes) / 1.5)
+        record = state.observed_participants.setdefault(
+            event.speaker_id,
+            {
+                "observation_count": 0,
+                "influence_estimate": 0.5,
+            },
+        )
+        count = min(int(record.get("observation_count", 0)) + 1, 1000)
+        previous = float(record.get("influence_estimate", 0.5))
+        record.update(
+            {
+                "observation_count": count,
+                "influence_estimate": max(
+                    0.0,
+                    min(1.0, previous + 0.2 * (effect_strength - previous)),
+                ),
+                "last_event_type": event.event_type.value,
+                "updated_at": utc_now(),
+            }
+        )
 
     @staticmethod
     def _mood(state: AffectState) -> str:

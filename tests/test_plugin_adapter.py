@@ -139,6 +139,43 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertNotIn("good job", state_path.read_text(encoding="utf-8"))
             self.assertNotIn("user_message", state_path.read_text(encoding="utf-8"))
 
+    def test_observed_style_and_influence_estimates_persist_without_transcript(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+            context.emit("on_session_start", **base)
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="good job",
+                turn_id="turn:one",
+            )
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="you are an idiot",
+                turn_id="turn:two",
+            )
+
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            raw_state = state_path.read_text(encoding="utf-8")
+            state = AffectState.from_dict(json.loads(raw_state))
+            relation = state.relationships["user:1"]
+            observation = state.observed_participants["user:1"]
+
+            self.assertNotEqual(relation.observed_style["supportive"], 0.5)
+            self.assertGreater(relation.observed_style["confrontational"], 0.5)
+            self.assertEqual(observation["observation_count"], 2)
+            self.assertGreaterEqual(observation["influence_estimate"], 0.0)
+            self.assertLessEqual(observation["influence_estimate"], 1.0)
+            self.assertNotIn("good job", raw_state)
+            self.assertNotIn("you are an idiot", raw_state)
+
     def test_command_requires_verified_admin_identity(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary, admin_user_ids=["user:admin"])

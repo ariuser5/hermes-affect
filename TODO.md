@@ -133,7 +133,7 @@ Acceptance criteria:
   participant identifiers.
 - [x] Use neutral traits for unknown participants.
 - [x] Model influence through separate inspectable factors.
-- [ ] Persist observed participant style and influence estimates.
+- [x] Persist observed participant style and influence estimates.
 - [x] Add tests for respected leaders, low-receptive resistance, leadership
   challenges, bot-to-bot conflict, and bot-to-user relationships.
 - [ ] Document a future limited public temperament signature.

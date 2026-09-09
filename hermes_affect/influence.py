@@ -6,7 +6,47 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from .config import AffectConfig
-from .models import ParticipantRelation, clamp
+from .events import EventType
+from .models import ParticipantRelation, clamp, utc_now
+
+OBSERVED_STYLE_FIELDS = (
+    "supportive",
+    "playful",
+    "confrontational",
+    "cooperative",
+)
+
+_STYLE_SIGNALS = {
+    EventType.PRAISE: (0.9, 0.1, 0.0, 0.9),
+    EventType.SUPPORT: (1.0, 0.1, 0.0, 1.0),
+    EventType.JOKE: (0.1, 1.0, 0.1, 0.4),
+    EventType.TEASING: (0.0, 0.8, 0.4, 0.2),
+    EventType.INSULT: (0.0, 0.0, 1.0, 0.0),
+    EventType.DISAGREEMENT: (0.1, 0.1, 0.7, 0.4),
+    EventType.APOLOGY: (0.7, 0.1, 0.0, 0.8),
+    EventType.RECONCILIATION: (0.8, 0.1, 0.0, 1.0),
+    EventType.USER_MODERATION: (0.2, 0.0, 0.4, 0.6),
+    EventType.BOT_MEDIATION: (0.7, 0.1, 0.0, 1.0),
+    EventType.BOT_PROVOCATION: (0.0, 0.1, 1.0, 0.0),
+    EventType.TOPIC_STEERING: (0.2, 0.1, 0.1, 0.7),
+    EventType.LEADERSHIP_CHALLENGE: (0.0, 0.0, 0.9, 0.1),
+}
+
+
+def observe_style(
+    relation: ParticipantRelation,
+    event_type: EventType,
+    *,
+    learning_rate: float = 0.2,
+) -> None:
+    """Update bounded style estimates without retaining message content."""
+
+    rate = clamp(learning_rate, 0.0, 1.0)
+    signals = _STYLE_SIGNALS.get(event_type, (0.5, 0.5, 0.5, 0.5))
+    for field_name, signal in zip(OBSERVED_STYLE_FIELDS, signals):
+        previous = relation.observed_style.get(field_name, 0.5)
+        relation.observed_style[field_name] = clamp(previous + rate * (signal - previous), 0.0, 1.0)
+    relation.updated_at = utc_now()
 
 
 @dataclass(frozen=True)
