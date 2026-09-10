@@ -177,7 +177,9 @@ Acceptance criteria:
 - [x] Implement `/affect calm`.
 - [x] Implement `/affect heat`.
 - [x] Define reviewed behavior for `/affect tune`.
-- [ ] Verify sender identity using Hermes-provided authenticated identity data.
+- [ ] Support authenticated sender identity for `/affect` commands when the
+  public Hermes command contract provides it.
+  - [x] Fail closed for the current raw-only command contract.
 - [x] Ensure bots cannot imitate verified-user administrative authority.
 - [x] Add natural-language moderation tests for calm, stop, continue, and
   lower-tone interventions.

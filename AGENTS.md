@@ -34,7 +34,8 @@ Checkpoint date: 2026-09-09.
   interventions. The adapter is built against the documented public Hermes
   general-plugin contract. One target deployment has provided compatibility
   observations, but those observations do not define a fixed supported
-  version.
+  version. Raw-only slash commands fail closed because the public command
+  contract does not currently provide authenticated sender context.
 - The durable-state restart, profile/session isolation, schema-version,
   command-intervention, conservative 90-day garbage-collection, bounded
   transcript-free audit-record, Phase 4 dynamics/influence coverage, Phase 1

@@ -48,8 +48,11 @@ controls. The plugin does not claim that the current hook guarantees
 request-only visibility.
 
 Administrative status/debug output is separate from normal response context.
-Administrative commands must verify the configured user identity. A bot's
-message is social influence, not administrative authority.
+Administrative commands must verify the configured user identity. Hermes'
+current public slash-command contract supplies only raw arguments, so the
+plugin rejects administrative commands when no authenticated identity context
+is available. A bot's message is social influence, not administrative
+authority.
 
 Any future public temperament signature must be opt-in and limited to coarse,
 reviewed categories for playfulness, assertiveness, and social influence. It

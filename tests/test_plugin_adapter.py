@@ -688,6 +688,7 @@ class PluginAdapterTests(unittest.TestCase):
             kwargs = {"profile_id": "bot:one", "session_id": "session:one"}
             context.emit("on_session_start", **kwargs)
 
+            raw_only = context.invoke_command("affect", "status")
             denied = context.invoke_command("affect", args_raw="status", **kwargs)
             allowed = context.invoke_command(
                 "affect", args_raw="status", sender_id="user:admin", **kwargs
@@ -698,6 +699,9 @@ class PluginAdapterTests(unittest.TestCase):
                 sender_id="user:admin",
                 sender_kind="bot",
                 **kwargs,
+            )
+            self.assertEqual(
+                raw_only, "Affect administration requires a verified user identity."
             )
             self.assertEqual(denied, "Affect administration requires a verified user identity.")
             self.assertEqual(bot_denied, "Affect administration requires a verified user identity.")

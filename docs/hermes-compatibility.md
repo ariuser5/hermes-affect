@@ -109,6 +109,12 @@ The observed command contract is `handler(raw_args: str) -> str | None`; the
 registered command name is normalized before dispatch. The adapter's existing
 positional command test covers this calling convention.
 
+The public raw-only command contract does not carry authenticated sender
+identity. The adapter therefore fails closed for administrative commands when
+no identity metadata is available. The local fixture also exercises an
+identity-enriched call so a future documented Hermes context extension can be
+supported without trusting identity values embedded in `raw_args`.
+
 ## Compatibility checks still needed
 
 The following are release or deployment checks rather than assumptions that
