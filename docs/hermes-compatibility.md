@@ -87,7 +87,10 @@ arguments and passes the complete payload to callbacks that accept `**kwargs`.
 The observed `pre_llm_call` payload includes `session_id`, `task_id`, `turn_id`,
 `user_message`, `conversation_history`, `is_first_turn`, `model`, `platform`,
 `parent_session_id`, and `sender_id`. Hermes inserts returned plugin context
-into the user message rather than the system prompt.
+into the user message rather than the system prompt. The official hook
+reference also warns that the exact API-bound message may be persisted in an
+`api_content` sidecar, so the adapter treats injected guidance as potentially
+present in session/API history.
 
 The observed runtime also confirms that SOUL loading is scoped to the
 active agent home. The default profile reads `<HERMES_HOME>/SOUL.md`; a named
@@ -128,7 +131,9 @@ should be hidden in the portable adapter:
 - the authenticated sender identity field and how bot-originated messages are
   marked;
 - whether compression exposes `parent_session_id` and on which hook;
-- whether injected context is retained in session/API history.
+- the exact persisted-history behavior of a particular deployment when its
+  privacy review requires an empirical smoke test; this is not assumed to be
+  request-only by the portable adapter.
 
 ## Optional deployment evidence worksheet
 

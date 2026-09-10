@@ -27,25 +27,28 @@ Hermes to redeliver the turn and the event to be applied again. The MVP keeps
 this limitation explicit rather than pretending that the file lock closes the
 transactional window.
 
-Dynamic context returned from `pre_llm_call` may be represented in Hermes
-session/API history depending on the installed Hermes version. The injected
-summary is therefore deliberately short and never contains the complete JSON
-state.
+The [official Hermes hook reference](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/hooks.md)
+documents that `pre_llm_call` context is appended to the current user message
+and that Hermes may persist the exact API-bound message in its `api_content`
+sidecar. The plugin therefore treats injected guidance as potentially visible
+in session/API history on supported runtimes; it never relies on this hook for
+request-only visibility. The injected summary is deliberately short and never
+contains the complete JSON state.
 
 ## Request-level privacy hardening
 
 The MVP uses the public `pre_llm_call` surface because it is the compatibility
-boundary currently covered by local fixtures. A future Hermes request-middleware
-hook could attach internal guidance only while assembling one model request,
-which may reduce the chance that the guidance becomes part of durable
-session/API history. That approach also introduces a version-specific
-dependency and should be adopted only when the documented public contract and
-compatibility fixtures support it.
+boundary covered by local fixtures. A future Hermes request-middleware hook
+could attach internal guidance only while assembling one model request, which
+may reduce the chance that the guidance becomes part of durable session/API
+history. That approach introduces another compatibility dependency and should
+be adopted only when the documented public contract and compatibility fixtures
+support it.
 
 Until then, `shadow_mode`, conservative `expression_gain`, short guidance, and
 the omission of numerical state or raw messages are the available privacy
-controls. The plugin does not claim that the current hook guarantees
-request-only visibility.
+controls. A deployment that requires request-only visibility must validate a
+documented request-level hook separately before enabling that design.
 
 Administrative status/debug output is separate from normal response context.
 Administrative commands must verify the configured user identity. Hermes'

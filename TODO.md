@@ -158,8 +158,9 @@ Acceptance criteria:
   steering, and `pass` behaviors where the Hermes surface supports them.
 - [x] Add shadow mode that updates/logs state without injecting context.
 - [x] Add configurable expression strength.
-- [ ] Confirm whether injected context appears in session/API history for the
-  target Hermes version.
+- [x] Document the public privacy behavior: `pre_llm_call` guidance is appended
+  to the user message and may be retained in API-bound history; the plugin does
+  not rely on request-only visibility.
 - [x] Evaluate request middleware as a later privacy-hardening option; defer
   implementation until the target Hermes hook is verified.
 
