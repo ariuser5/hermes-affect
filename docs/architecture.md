@@ -41,7 +41,8 @@ Response posture is derived from the latest clear event plus bounded current
 state. The MVP can express mediation, reconciliation, topic steering, topic
 avoidance, guarded/evasive/refusal behavior, counterattack, and pass guidance
 through the internal context summary. Separate response-routing hooks are not
-assumed until the target Hermes version is verified.
+assumed unless they are part of the documented public Hermes plugin contract
+and covered by a compatibility fixture.
 
 When `shadow_mode` is enabled, the plugin performs the same state, observation,
 and audit updates but returns no affective context to Hermes. This makes a

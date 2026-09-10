@@ -38,8 +38,9 @@ The MVP uses the public `pre_llm_call` surface because it is the compatibility
 boundary currently covered by local fixtures. A future Hermes request-middleware
 hook could attach internal guidance only while assembling one model request,
 which may reduce the chance that the guidance becomes part of durable
-session/API history. That approach also introduces a new version-specific
-dependency and must be verified against the target runtime before adoption.
+session/API history. That approach also introduces a version-specific
+dependency and should be adopted only when the documented public contract and
+compatibility fixtures support it.
 
 Until then, `shadow_mode`, conservative `expression_gain`, short guidance, and
 the omission of numerical state or raw messages are the available privacy

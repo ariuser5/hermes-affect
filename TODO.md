@@ -40,21 +40,20 @@ Acceptance criteria:
   neutral fallback with an administrative warning.
 - Unknown fields do not silently change behavior.
 
-## Phase 1 — freeze the Hermes compatibility contract
+## Phase 1 — public Hermes compatibility baseline
 
-- [x] Record the target image tag and digest used by the Docker deployment.
-- [x] Record the running Hermes version from the Pi using read-only commands.
-- [x] Verify the target version's general-plugin registration contract.
-- [x] Verify callback payloads for `pre_llm_call`, `post_llm_call`,
-  `on_session_start`, `on_session_end`, `on_session_finalize`, and
-  `on_session_reset`.
-- [x] Verify `ctx.register_command()` callback arguments.
-- [x] Verify profile-home and `SOUL.md` discovery behavior.
-- [ ] Verify how compression exposes `parent_session_id`.
-- [x] Add a fake Hermes context fixture covering the agreed callback shapes.
-- [x] Document the current adapter contract and any version-specific code.
-- [x] Record the target container's `HERMES_HOME` value without embedding a
-  deployment-specific host path.
+- [x] Define the documented general-plugin registration methods used by the
+  adapter.
+- [x] Define the documented lifecycle and command callback contract used by
+  the adapter.
+- [x] Keep callbacks tolerant of additive keyword payload fields.
+- [x] Add a fake Hermes context fixture covering the public callback shapes.
+- [x] Document the portable adapter contract and avoid private Hermes imports.
+- [ ] Validate the adapter against the newest documented Hermes public API.
+- [ ] Add versioned fixtures only when a documented public contract difference
+  requires compatibility behavior.
+- [ ] Document the support policy: newest Hermes releases have priority, while
+  older versions remain supported when the public contract is unchanged.
 
 Acceptance criteria:
 
@@ -62,6 +61,8 @@ Acceptance criteria:
 - Hook payload assumptions are covered by tests.
 - Compatibility uncertainty is documented instead of hidden behind broad
   exception handling.
+- Compatibility logic stays at the public registration and payload boundary;
+  deployment-specific observations do not define the supported version range.
 
 ## Phase 2 — SOUL configuration and initialization
 
@@ -217,6 +218,10 @@ Acceptance criteria:
 - [ ] Run one real two-bot group only after single-bot behavior is stable.
 - [ ] Pin the deployed plugin to an immutable commit.
 - [x] Add rollback instructions for the plugin source and runtime state.
+- [x] Record one observed Hermes deployment as non-normative compatibility
+  evidence.
+- [ ] Validate the plugin in a real test profile using the newest supported
+  Hermes release.
 
 Deployment gate:
 

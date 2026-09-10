@@ -1,21 +1,23 @@
 # Hermes compatibility contract
 
-This document separates the adapter behavior covered by local tests from the
-parts that still require inspection of the target Hermes installation.
+This document defines the portable public Hermes plugin contract used by the
+adapter. It deliberately does not make one Hermes image or deployment the
+minimum supported version. Newest Hermes releases have priority; older
+versions remain candidates when they preserve this documented contract.
 
-## Target installation
+## Compatibility strategy
 
-The current deployment target is Hermes `0.20.2` with image tag
-`v2026.8.16`. Read-only inspection of the running container recorded the
-immutable image digest as
-`sha256:f8f548d87d16634d1ad9e3777280f3f577ba2358703f04e18e74007ffd3621bf`.
-The target is an ARM64 Raspberry Pi deployment.
-The running container sets `HERMES_HOME=/opt/data`; this is the container-side
-Hermes home, not a host or Compose path. The persistent deployment mount is
-therefore the relevant location to inspect for profiles, `SOUL.md`, plugins,
-and runtime state.
+The implementation uses only public general-plugin registration methods and
+keeps all callbacks at the public keyword-payload boundary. Additive fields
+are ignored by the adapter, and missing optional fields use safe defaults.
+Version-specific branches belong at this boundary only when a public Hermes
+release documents a real contract difference and a versioned fixture covers it.
 
-## Locally covered public surface
+Local fake-Hermes tests are the primary development contract. A real Hermes
+profile smoke test is a release-validation activity, not a requirement to
+reverse-engineer or hard-code one deployment.
+
+## Documented public surface
 
 The plugin uses only the public registration methods represented by the fake
 context fixture:
@@ -55,8 +57,9 @@ administrative command reports that no active session was supplied. Local tests
 exercise this behavior across startup, model, checkpoint, reset, finalize, and
 end hooks.
 The local fixture also covers a callback-provided `soul_path` when the context
-has no configured override. The target Hermes profile-home and effective
-`SOUL.md` discovery rules still require deployment verification.
+has no configured override. The runtime must provide the effective profile
+home or SOUL path; a release smoke test can verify that integration without
+making one host layout part of the plugin contract.
 Environment fallback tests also cover `HERMES_HOME/SOUL.md` and
 `HERMES_PROFILE`; these validate the adapter's local defaults, not the target
 runtime's actual environment values.
@@ -66,25 +69,28 @@ context `state_dir` takes precedence over that environment fallback.
 An incomplete session-start payload also skips both state initialization and
 garbage collection, so it cannot clean up unrelated sessions accidentally.
 
-## Target-verified public surface
+## Compatibility observations
 
-Source inspection of the running Hermes `0.20.2` installation confirms that
-the general plugin manager exposes `register_hook()` and `register_command()`.
-Lifecycle dispatch invokes callbacks with keyword arguments and passes the
-complete payload to callbacks that accept `**kwargs`.
+The following observations were collected from one Hermes `0.20.2` deployment.
+They are useful validation evidence, but are not a version pin or the
+definition of the supported range.
 
-The target `pre_llm_call` payload includes `session_id`, `task_id`, `turn_id`,
+The observed general plugin manager exposes `register_hook()` and
+`register_command()`. Lifecycle dispatch invokes callbacks with keyword
+arguments and passes the complete payload to callbacks that accept `**kwargs`.
+
+The observed `pre_llm_call` payload includes `session_id`, `task_id`, `turn_id`,
 `user_message`, `conversation_history`, `is_first_turn`, `model`, `platform`,
 `parent_session_id`, and `sender_id`. Hermes inserts returned plugin context
 into the user message rather than the system prompt.
 
-Target source inspection also confirms that SOUL loading is scoped to the
+The observed runtime also confirms that SOUL loading is scoped to the
 active agent home. The default profile reads `<HERMES_HOME>/SOUL.md`; a named
 profile reads `<HERMES_HOME>/profiles/<profile-name>/SOUL.md`. The plugin should
 therefore receive or derive the active profile home rather than assuming that
 the process-wide Hermes home is always the effective SOUL location.
 
-The target lifecycle payloads are also verified:
+The observed lifecycle payloads are:
 
 - `on_session_start` fires for a new session with `session_id`, `model`, and
   `platform`.
@@ -99,26 +105,26 @@ The target lifecycle payloads are also verified:
 - `on_session_finalize` accepts `session_id`, `platform`, `reason`, and
   optional extra keyword fields.
 
-The target command contract is `handler(raw_args: str) -> str | None`; the
+The observed command contract is `handler(raw_args: str) -> str | None`; the
 registered command name is normalized before dispatch. The adapter's existing
 positional command test covers this calling convention.
 
-## Not yet verified against the target runtime
+## Compatibility checks still needed
 
-The following remain deployment compatibility checks rather than assumptions
-that should be hidden in the adapter:
+The following are release or deployment checks rather than assumptions that
+should be hidden in the portable adapter:
 
 - the authenticated sender identity field and how bot-originated messages are
   marked;
-- profile-home discovery and the effective `SOUL.md` location;
 - whether compression exposes `parent_session_id` and on which hook;
 - whether injected context is retained in session/API history.
 
-## Target verification worksheet
+## Optional deployment evidence worksheet
 
-Complete this worksheet from the target Hermes installation using the
-deployment's normal read-only inspection procedure. Keep deployment-specific
-paths, credentials, and runtime state outside this source repository.
+Use this worksheet when validating a particular Hermes release or deployment.
+Keep deployment-specific paths, credentials, and runtime state outside this
+source repository. These values document an observation; they do not define
+the plugin's supported version range.
 
 ```text
 target image reference: nousresearch/hermes-agent:v2026.8.16
@@ -133,13 +139,7 @@ compression hook and parent_session_id behavior:
 evidence location or command output summary:
 ```
 
-For each observed payload, record the exact field names and whether the value
-is absent, null, or an empty string. Compare those observations with the local
-fixture contract above before changing the adapter. Do not mark the related
-TODO items complete based only on this worksheet; they require evidence from
-the target runtime.
-
-Until those checks are completed, the fake context tests are contract fixtures,
-not proof of compatibility with a deployed Hermes process. No version-specific
-adapter branch is currently needed; any future branch should remain at the
+For each observed payload, record exact field names and whether values are
+absent, null, or empty. Compare them with the public fixture contract before
+changing the adapter. Any version-specific branch must remain at the
 registration/payload boundary and be covered by a versioned fixture.

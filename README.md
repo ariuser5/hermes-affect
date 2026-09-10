@@ -14,10 +14,12 @@ decay and transition primitives, social-influence policy interfaces, JSON
 storage, response-posture derivation, a Hermes registration adapter, examples,
 and unit tests.
 
-The scaffold is intentionally not yet a complete production integration. Exact
-Hermes hook payloads, profile-home discovery, compression lineage handling,
-administrative identity plumbing, garbage collection, and full retry
-idempotency must be validated against the target Hermes image before deployment.
+The plugin is intentionally developed against Hermes' documented public
+general-plugin API rather than a single pinned runtime image. Newest Hermes
+versions have priority; older versions remain candidates when they preserve
+the documented registration and callback contract. Version-specific behavior,
+deployment paths, and full retry idempotency are validated separately from the
+portable plugin implementation.
 
 ## Session affect configuration
 
