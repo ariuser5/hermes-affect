@@ -9,7 +9,6 @@ from unittest.mock import patch
 
 from hermes_affect.models import AffectState
 from hermes_affect.plugin import register
-
 from tests.fakes import FakeHermesContext
 
 
