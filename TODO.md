@@ -49,10 +49,10 @@ Acceptance criteria:
 - [x] Keep callbacks tolerant of additive keyword payload fields.
 - [x] Add a fake Hermes context fixture covering the public callback shapes.
 - [x] Document the portable adapter contract and avoid private Hermes imports.
-- [ ] Validate the adapter against the newest documented Hermes public API.
+- [x] Validate the adapter against the newest documented Hermes public API.
 - [ ] Add versioned fixtures only when a documented public contract difference
   requires compatibility behavior.
-- [ ] Document the support policy: newest Hermes releases have priority, while
+- [x] Document the support policy: newest Hermes releases have priority, while
   older versions remain supported when the public contract is unchanged.
 
 Acceptance criteria:

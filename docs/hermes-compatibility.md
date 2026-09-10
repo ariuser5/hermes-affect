@@ -5,6 +5,11 @@ adapter. It deliberately does not make one Hermes image or deployment the
 minimum supported version. Newest Hermes releases have priority; older
 versions remain candidates when they preserve this documented contract.
 
+The canonical references are the [Hermes plugin guide](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/plugins.md)
+and the [Hermes hook reference](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/hooks.md).
+They define the public registration methods, accepted hook names, callback
+signatures, timing, return handling, and privacy notes used here.
+
 ## Compatibility strategy
 
 The implementation uses only public general-plugin registration methods and

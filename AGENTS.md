@@ -54,8 +54,8 @@ Checkpoint date: 2026-09-09.
 1. Review and commit the current public-compatibility strategy revision when
    requested, then confirm the latest local commit passes a manually triggered
    GitHub Actions run.
-2. Continue with Phase 1 in `TODO.md`: validate the documented public Hermes
-   API against the newest supported release, keeping older-version behavior at
+2. Continue through the remaining TODO phases using the documented public
+   Hermes API as the compatibility baseline; keep older-version behavior at
    the public registration/payload boundary.
 3. Do not run the Raspberry Pi commands or use SSH unless the user explicitly
    authorizes that action.
