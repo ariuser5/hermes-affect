@@ -11,8 +11,8 @@ instructions belong in the infrastructure repository that runs Hermes.
 - [x] Add unit tests, packaging metadata, documentation, and CI.
 - [x] Commit the Ruff fixes and manual-only workflow change.
 - [x] Push the CI fix commit to `main`.
-- [ ] Trigger CI manually from `main`.
-- [ ] Confirm every Python matrix job passes before beginning runtime work.
+- [x] Trigger CI manually from `main`.
+- [x] Confirm every Python matrix job passes before beginning runtime work.
 
 Acceptance criteria:
 

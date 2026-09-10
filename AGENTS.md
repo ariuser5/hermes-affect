@@ -19,7 +19,7 @@ At the start of every session:
 Checkpoint date: 2026-09-10.
 
 - The repository is `hermes-affect`.
-- `6c043d7` (`fix: honor explicit command identity verification`) is the current
+- `079bbfb` (`ci: fix Ruff import ordering`) is the current
   local `main` commit and matches `origin/main`.
 - The compact seven-trait design is implemented: reactivity, persistence,
   pride, playfulness, assertiveness, social influence, and receptiveness, with
@@ -46,21 +46,19 @@ Checkpoint date: 2026-09-10.
   verification slices are committed. Run `git status --short --branch` before
   continuing because the repository may contain a pending documentation
   update from the last handoff.
-- The previous GitHub failure came from rerunning old commit `0cf0657`; verify
-  a fresh manual run from the current `main` branch before changing CI again.
+- The current Python 3.10–3.13 matrix has passed from a fresh manual run on
+  `main`; do not change CI again unless a new failure provides evidence.
 - `TODO.md` is the current planning file and now records the compact-trait
   design checkpoint. Preserve it unless the user explicitly asks for changes.
 
 ## Immediate next work
 
-1. Trigger CI manually from the current `main` branch and confirm the Python
-   matrix passes.
-2. Continue through the remaining TODO phases using the documented public
+1. Continue through the remaining TODO phases using the documented public
    Hermes API as the compatibility baseline; add versioned fixtures only when
    Hermes documents a real public contract difference.
-3. Do not run the Raspberry Pi commands or use SSH unless the user explicitly
+2. Do not run the Raspberry Pi commands or use SSH unless the user explicitly
    authorizes that action.
-4. Continue through the TODO phases incrementally, keeping tests and
+3. Continue through the TODO phases incrementally, keeping tests and
    documentation synchronized.
 
 ## Repository and deployment boundaries
