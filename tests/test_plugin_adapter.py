@@ -700,11 +700,22 @@ class PluginAdapterTests(unittest.TestCase):
                 sender_kind="bot",
                 **kwargs,
             )
+            explicitly_unverified = context.invoke_command(
+                "affect",
+                args_raw="status",
+                sender_id="user:admin",
+                verified_user=False,
+                **kwargs,
+            )
             self.assertEqual(
                 raw_only, "Affect administration requires a verified user identity."
             )
             self.assertEqual(denied, "Affect administration requires a verified user identity.")
             self.assertEqual(bot_denied, "Affect administration requires a verified user identity.")
+            self.assertEqual(
+                explicitly_unverified,
+                "Affect administration requires a verified user identity.",
+            )
             self.assertIn("session=session:one", allowed)
 
     def test_natural_moderation_changes_state_only_for_verified_user(self) -> None:

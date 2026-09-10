@@ -295,6 +295,8 @@ class AffectRuntime:
         sender_id = str(kwargs.get("sender_id") or "")
         if str(kwargs.get("sender_kind") or "").lower() == "bot":
             return False
+        if "verified_user" in kwargs and not bool(kwargs["verified_user"]):
+            return False
         configured = _config_value(self.ctx, "admin_user_ids", [])
         return sender_id in {str(item) for item in configured} and bool(sender_id)
 
