@@ -22,6 +22,11 @@ Local fake-Hermes tests are the primary development contract. A real Hermes
 profile smoke test is a release-validation activity, not a requirement to
 reverse-engineer or hard-code one deployment.
 
+The current documented public contract has no versioned difference that
+requires a separate adapter branch or fixture. If a future Hermes release
+documents a changed registration or callback contract, add a focused versioned
+fixture at that public boundary before adding compatibility logic.
+
 ## Documented public surface
 
 The plugin uses only the public registration methods represented by the fake

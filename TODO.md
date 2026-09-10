@@ -50,8 +50,9 @@ Acceptance criteria:
 - [x] Add a fake Hermes context fixture covering the public callback shapes.
 - [x] Document the portable adapter contract and avoid private Hermes imports.
 - [x] Validate the adapter against the newest documented Hermes public API.
-- [ ] Add versioned fixtures only when a documented public contract difference
-  requires compatibility behavior.
+- [x] Review the documented public contract for versioned differences; none
+  currently requires version-specific behavior or a separate fixture. Add one
+  only when Hermes documents a real compatibility difference.
 - [x] Document the support policy: newest Hermes releases have priority, while
   older versions remain supported when the public contract is unchanged.
 
