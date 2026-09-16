@@ -84,11 +84,23 @@ When `shadow_mode` is enabled, the plugin performs the same state, observation,
 and audit updates but returns no affective context to Hermes. This makes a
 test profile observable without changing model prompting.
 
-The `tuning.expression_gain` setting controls context expression separately
-from event escalation: zero suppresses affective context while retaining state
-updates, low values request restrained guidance, and high values make the
-current posture more explicit. Numerical state is never included in the
-injected text.
+The `tuning.expression_gain` setting is a static multiplier for a derived
+runtime expression drive. The drive first combines current valence, arousal,
+frustration, and offense into an affect level `x`, then applies the smooth
+curve `1 - exp(-k*x)`. `k` is derived from `expression_gain` and relevant
+temperament traits. As a result, the same expression setting can produce
+measured guidance while the bot is calm and progressively firmer, terser, or
+more confrontational as tension accumulates, without a hard clamp
+discontinuity. Zero still suppresses affective context while retaining state
+updates. Numerical state is never included in the injected text.
+
+At `expression_drive >= 0.80`, the highest expression tier permits only
+proportional rebuttal, restrained sarcasm, or a direct call-out; it explicitly
+disallows threats, slurs, and gratuitous abuse. The refusal posture requests
+the single `🤨` response. Repair postures take precedence over conflict tiers,
+so an apology or verified moderation can immediately request reconciliation or
+calm engagement while the underlying state continues to repair according to
+`repair_gain`.
 
 Verified administrators may use `/affect tune` to set a session-scoped override
 for `expression_gain`, `escalation_gain`, or `repair_gain` within `[0, 10]`.
@@ -131,8 +143,11 @@ range `[0, 1]`:
 These are stable predispositions, not mutable session state. Runtime state
 contains mood and relationships separately. `expression_gain`,
 `escalation_gain`, and `repair_gain` live under `tuning` and control how
-strongly the engine expresses, escalates, and repairs events. They are bounded
-for numeric stability without imposing a low global influence ceiling.
+strongly the engine expresses, escalates, and repairs events. Escalation and
+repair gains shape the runtime state through event transitions; the derived
+expression drive then reads that state rather than applying those gains a
+second time. The gains are bounded for numeric stability without imposing a
+low global influence ceiling.
 
 The engine derives narrower concepts instead of adding overlapping knobs:
 leadership tendency is mainly `assertiveness × social_influence`; effective

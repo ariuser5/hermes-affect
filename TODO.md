@@ -192,6 +192,11 @@ Acceptance criteria:
   steering, and `pass` behaviors where the Hermes surface supports them.
 - [x] Add shadow mode that updates/logs state without injecting context.
 - [x] Add configurable expression strength.
+- [x] Derive a runtime expression drive from current affect and temperament,
+  using a smooth asymptotic curve whose curvature is controlled by
+  `expression_gain` instead of a static wording switch.
+- [x] Add graduated expression tiers with high-conflict rebuttal/sarcasm
+  guidance, an explicit refusal emoji, and repair-posture precedence.
 - [x] Document the public privacy behavior: `pre_llm_call` guidance is appended
   to the user message and may be retained in API-bound history; the plugin does
   not rely on request-only visibility.

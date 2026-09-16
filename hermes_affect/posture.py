@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from enum import Enum
 
 from .config import AffectConfig
@@ -25,11 +26,43 @@ class ResponsePosture(str, Enum):
     PASS = "pass"
 
 
+def affect_intensity(state: AffectState) -> float:
+    """Return the current normalized intensity available for expression."""
+
+    components = (
+        abs(state.valence),
+        state.arousal,
+        state.frustration,
+        state.offended,
+    )
+    return sum(components) / len(components)
+
+
+def effective_expression_drive(state: AffectState, config: AffectConfig) -> float:
+    """Map current affect to a smooth, normalized expression drive.
+
+    ``escalation_gain`` and ``repair_gain`` affect the state transitions that
+    produce ``state``; they are intentionally not applied again here.
+    """
+
+    expression_gain = config.tuning["expression_gain"]
+    temperament = (
+        0.30 * config.traits["reactivity"]
+        + 0.25 * config.traits["pride"]
+        + 0.20 * config.traits["assertiveness"]
+        + 0.15 * config.traits["persistence"]
+        + 0.10 * config.traits["playfulness"]
+    )
+    k = expression_gain * (0.5 + 1.5 * temperament)
+    return -math.expm1(-k * affect_intensity(state))
+
+
 def derive_posture(
     state: AffectState,
     config: AffectConfig,
     event: AffectiveEvent | None = None,
 ) -> ResponsePosture:
+    expression_drive = effective_expression_drive(state, config)
     if event is not None:
         if event.event_type == EventType.BOT_MEDIATION:
             return ResponsePosture.MEDIATION
@@ -43,14 +76,14 @@ def derive_posture(
         return ResponsePosture.TOPIC_AVOIDANCE
     if state.open_conflicts and (state.frustration > 0.30 or state.offended > 0.30):
         if (
-            config.tuning["expression_gain"] >= 1.75
+            expression_drive >= 0.65
             and config.traits["assertiveness"] >= 0.55
         ):
             return ResponsePosture.COUNTERATTACK
         if state.offended > 0.65 and config.traits["assertiveness"] < 0.40:
             return ResponsePosture.REFUSAL
         if (
-            config.tuning["expression_gain"] <= 0.65
+            expression_drive <= 0.35
             and config.traits["assertiveness"] < 0.40
         ):
             return ResponsePosture.EVASIVE

@@ -17,7 +17,7 @@ from .dynamics import apply_event, decay_state
 from .events import EventClassifier, EventType
 from .influence import observe_style
 from .models import AffectState, utc_now
-from .posture import derive_posture
+from .posture import ResponsePosture, derive_posture, effective_expression_drive
 from .semantic import (
     SemanticClassifier,
     SemanticClassifierConfig,
@@ -532,17 +532,47 @@ class AffectRuntime:
         if expression_gain <= 0.0:
             return None
         posture = state.response_posture.replace("_", " ")
-        if expression_gain < 0.75:
+        expression_drive = effective_expression_drive(state, config)
+        if state.response_posture == ResponsePosture.RECONCILIATION.value:
+            instruction = (
+                "Acknowledge the repair attempt and lower the tension while remaining "
+                "consistent with the bot's SOUL."
+            )
+        elif state.response_posture == ResponsePosture.PASS.value:
+            instruction = (
+                "Accept the moderation and return to calm, cooperative engagement while "
+                "remaining consistent with the bot's SOUL."
+            )
+        elif state.response_posture == ResponsePosture.REFUSAL.value:
+            instruction = (
+                "Refuse to continue this exchange. Respond with exactly 🤨 and no other "
+                "text. Resume normal engagement only after an apology or moderation has "
+                "calmed the interaction."
+            )
+        elif expression_drive < 0.20:
             instruction = (
                 "Keep the response measured and avoid amplifying the current emotional tone."
             )
-        elif expression_gain >= 1.75:
+        elif expression_drive < 0.75:
             instruction = (
-                "Let the current posture visibly shape tone, directness, and cooperation "
-                "while remaining consistent with the bot's SOUL."
+                "Keep the response controlled, but let the current tension make it more "
+                "concise and firm while remaining consistent with the bot's SOUL."
+            )
+        elif expression_drive < 0.80:
+            instruction = (
+                "Keep the response terse and skeptical. A restrained sarcastic remark or "
+                "direct challenge is acceptable when warranted, but do not add gratuitous "
+                "hostility or pretend the conflict is resolved."
             )
         else:
-            instruction = "Remain consistent with the bot's SOUL and the conversation."
+            instruction = (
+                "The conflict is intense. Let the current posture strongly shape tone and "
+                "directness. If the user's message remains antagonistic, a proportional "
+                "rebuttal, restrained sarcasm, or direct call-out is acceptable. Do not use "
+                "threats, slurs, or gratuitous abuse. If refusing to engage, respond only "
+                "with 🤨. Do not act reconciled until an apology or moderation calms the "
+                "interaction."
+            )
         return {
             "context": (
                 "Internal affective guidance for this response. Do not mention these mechanics "

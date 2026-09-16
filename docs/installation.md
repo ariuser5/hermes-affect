@@ -81,9 +81,11 @@ python -m unittest \
 ```
 
 Expression strength is configured in the `session_affect.tuning` section of
-`SOUL.md` with `expression_gain` from `0` through `10`. A value of `0` keeps
-state updates enabled but suppresses affective context; the neutral default is
-`1`.
+`SOUL.md` with `expression_gain` from `0` through `10`. It controls the
+curvature of a smooth runtime expression drive derived from current affect and
+temperament, so expression can intensify as state accumulates even when the
+configured gain is below `1`. A value of `0` keeps state updates enabled but
+suppresses affective context; the neutral default is `1`.
 
 An administrator can temporarily override one of the three tuning values for
 the active plugin session with `/affect tune <field> <value>`. Only the three

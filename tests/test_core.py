@@ -16,7 +16,11 @@ from hermes_affect.influence import (
     evaluate_influence,
 )
 from hermes_affect.models import AffectState, ParticipantRelation
-from hermes_affect.posture import ResponsePosture, derive_posture
+from hermes_affect.posture import (
+    ResponsePosture,
+    derive_posture,
+    effective_expression_drive,
+)
 from hermes_affect.storage import StateStore
 
 FIXTURES = Path(__file__).parent / "fixtures" / "soul"
@@ -164,6 +168,25 @@ class SoulConfigTests(unittest.TestCase):
 
 
 class DynamicsTests(unittest.TestCase):
+    def test_expression_drive_is_smooth_and_bounded(self) -> None:
+        config = replace(
+            neutral_config(),
+            tuning={**neutral_config().tuning, "expression_gain": 2.0},
+        )
+        calm = AffectState.initial("bot-a", "calm")
+        affected = AffectState.initial("bot-a", "affected")
+        affected.valence = -1.0
+        affected.arousal = 1.0
+        affected.frustration = 1.0
+        affected.offended = 1.0
+
+        calm_drive = effective_expression_drive(calm, config)
+        affected_drive = effective_expression_drive(affected, config)
+
+        self.assertEqual(calm_drive, 0.0)
+        self.assertGreater(affected_drive, calm_drive)
+        self.assertLess(affected_drive, 1.0)
+
     def test_severe_insult_can_overcome_respect_for_proud_reactive_bot(self) -> None:
         config = replace(
             neutral_config(),

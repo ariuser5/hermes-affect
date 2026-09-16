@@ -4,11 +4,14 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
+from hermes_affect.config import neutral_config
 from hermes_affect.models import AffectState
-from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, register
+from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, AffectRuntime, register
+from hermes_affect.posture import ResponsePosture
 from tests.fakes import FakeHermesContext
 
 
@@ -429,6 +432,90 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertIsNone(result)
             self.assertEqual(state.revision, 1)
             self.assertEqual(len(state.audit_records), 1)
+
+    def test_current_affect_changes_expression_guidance_at_low_expression_gain(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            soul_path = Path(temporary) / "SOUL.md"
+            soul_path.write_text(
+                """session_affect:
+  schema_version: 1
+  tuning:
+    expression_gain: 0.5
+""",
+                encoding="utf-8",
+            )
+            context = FakeHermesContext(state_dir=temporary, soul_path=soul_path)
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+
+            context.emit("on_session_start", **base)
+            low_guidance = context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="hello",
+                turn_id="turn:low",
+            )
+            for index in range(5):
+                context.emit(
+                    "pre_llm_call",
+                    **base,
+                    user_message="you are useless",
+                    turn_id=f"turn:high-{index}",
+                )
+            state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
+            state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
+            high_guidance = context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="hello again",
+                turn_id="turn:observe",
+            )
+
+            assert low_guidance is not None
+            assert high_guidance is not None
+            self.assertIn("Keep the response measured", low_guidance["context"])
+            self.assertIn("current tension", high_guidance["context"])
+            self.assertGreater(state.offended, 0.0)
+
+    def test_high_expression_drive_allows_proportional_conflict_behavior(self) -> None:
+        state = AffectState.initial("bot:one", "session:one")
+        state.valence = -1.0
+        state.arousal = 1.0
+        state.frustration = 1.0
+        state.offended = 1.0
+        state.mood = "irritated"
+        state.response_posture = ResponsePosture.COUNTERATTACK.value
+        config = replace(
+            neutral_config(),
+            traits={
+                **neutral_config().traits,
+                "reactivity": 0.9,
+                "pride": 0.9,
+                "assertiveness": 0.9,
+                "persistence": 0.9,
+            },
+            tuning={**neutral_config().tuning, "expression_gain": 1.0},
+        )
+
+        guidance = AffectRuntime._context(state, config)
+
+        assert guidance is not None
+        self.assertIn("proportional rebuttal", guidance["context"])
+        self.assertIn("restrained sarcasm", guidance["context"])
+
+    def test_refusal_posture_requests_the_emoji_only(self) -> None:
+        state = AffectState.initial("bot:one", "session:one")
+        state.mood = "irritated"
+        state.response_posture = ResponsePosture.REFUSAL.value
+
+        guidance = AffectRuntime._context(state, neutral_config())
+
+        assert guidance is not None
+        self.assertIn("exactly 🤨 and no other text", guidance["context"])
 
     def test_local_conservative_injection_covers_relationships_and_moderation(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
