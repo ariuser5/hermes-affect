@@ -6,6 +6,7 @@ import hashlib
 import logging
 import math
 import os
+from collections.abc import Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,20 +14,32 @@ from typing import Any
 
 from .config import TUNING_FIELDS, AffectConfig, neutral_config, parse_soul_affect
 from .dynamics import apply_event, decay_state
-from .events import EventClassifier
+from .events import EventClassifier, EventType
 from .influence import observe_style
 from .models import AffectState, utc_now
 from .posture import derive_posture
+from .semantic import (
+    SemanticClassifier,
+    SemanticClassifierConfig,
+    arbitrate_classifications,
+)
 from .storage import DEFAULT_ABANDONED_STATE_DAYS, StateStore
 
 logger = logging.getLogger("hermes-affect")
 
 
 def _config_value(ctx: Any, key: str, default: Any) -> Any:
+    missing = object()
     try:
-        return ctx.get_config(key, default)
+        value = ctx.get_config(key, missing)
+        if value is not missing and value is not None:
+            return value
+        plugin_config = ctx.get_config("hermes-affect", missing)
+        if isinstance(plugin_config, Mapping) and key in plugin_config:
+            return plugin_config[key]
     except (AttributeError, TypeError, ValueError):
-        return default
+        pass
+    return default
 
 
 def _state_gc_days(ctx: Any) -> float:
@@ -65,6 +78,13 @@ class AffectRuntime:
         self.shadow_mode = _shadow_mode(ctx)
         self.ctx = ctx
         self.classifier = EventClassifier()
+        self.semantic_config, semantic_warnings = SemanticClassifierConfig.from_mapping(
+            _config_value(ctx, "semantic_classifier", None)
+        )
+        for warning in semantic_warnings:
+            logger.warning("%s", warning)
+        self.semantic_classifier = SemanticClassifier(ctx, self.semantic_config)
+        self._semantic_call_active = False
         self.config = neutral_config()
         self.soul_warnings: list[str] = []
 
@@ -137,6 +157,9 @@ class AffectRuntime:
             logger.info("Removed %d abandoned affect state file(s)", len(report.removed))
 
     def pre_llm_call(self, **kwargs: Any) -> dict[str, str] | None:
+        if self._semantic_call_active:
+            logger.warning("semantic_classification status=reentrant_call_ignored")
+            return None
         state = self._state(kwargs)
         if state is None:
             return None
@@ -165,13 +188,40 @@ class AffectRuntime:
         audit_entries: list[
             tuple[Any, str, dict[str, dict[str, float]], dict[str, dict[str, float]]]
         ] = []
-        last_event = None
-        for event in self.classifier.classify(
+        deterministic_events = self.classifier.classify(
             message,
             speaker_id=speaker_id,
             speaker_kind=speaker_kind,
             verified_user=verified_user,
+        )
+        events = deterministic_events
+        if self.semantic_config.enabled and not any(
+            event.event_type == EventType.USER_MODERATION for event in deterministic_events
         ):
+            self._semantic_call_active = True
+            try:
+                semantic_outcome = self.semantic_classifier.classify(
+                    message,
+                    sender_id=speaker_id,
+                    sender_kind=speaker_kind,
+                    bot_name=self._bot_name(kwargs),
+                    bot_aliases=self._bot_aliases(kwargs),
+                    known_participants=self._known_participants(kwargs),
+                    conversation_history=kwargs.get("conversation_history", ()),
+                )
+            finally:
+                self._semantic_call_active = False
+            events = arbitrate_classifications(
+                deterministic_events,
+                semantic_outcome,
+                speaker_id=speaker_id,
+                bot_identities=self._bot_identities(kwargs),
+                min_confidence=self.semantic_config.min_confidence,
+                fallback=self.semantic_config.fallback,
+            )
+
+        last_event = None
+        for event in events:
             last_event = event
             before = self._audit_snapshot(state, event.speaker_id)
             rule = apply_event(state, event, config)
@@ -179,8 +229,10 @@ class AffectRuntime:
             audit_entries.append((event, rule, before, after))
             self._record_observation(state, event, before, after)
             logger.info(
-                "event=%s speaker=%s rule=%s posture_before=%s",
+                "event=%s source=%s confidence=%.2f speaker=%s rule=%s posture_before=%s",
                 event.event_type,
+                event.source,
+                event.candidate_confidence,
                 speaker_id,
                 rule,
                 state.response_posture,
@@ -193,6 +245,13 @@ class AffectRuntime:
                     "event_type": event.event_type.value,
                     "speaker_id": event.speaker_id,
                     "rule_name": rule,
+                    "classification": {
+                        "source": event.source,
+                        "candidate_confidence": event.candidate_confidence,
+                        "matched_rule": event.matched_rule,
+                        "target": event.target,
+                        "target_id": event.target_id,
+                    },
                     "posture": state.response_posture,
                     "affected": self._audit_changes(before, after),
                 }
@@ -304,6 +363,64 @@ class AffectRuntime:
         tuning = dict(self.config.tuning)
         tuning.update(state.tuning_overrides)
         return replace(self.config, tuning=tuning)
+
+    @staticmethod
+    def _string_values(value: Any) -> list[str]:
+        if isinstance(value, str):
+            return [value]
+        if isinstance(value, Mapping):
+            values = list(value.keys()) + list(value.values())
+        elif isinstance(value, (list, tuple, set)):
+            values = list(value)
+        else:
+            return []
+        return [str(item) for item in values if isinstance(item, (str, int, float))]
+
+    def _bot_name(self, kwargs: dict[str, Any]) -> str:
+        for key in ("bot_name", "agent_name", "profile_name", "profile_id"):
+            value = kwargs.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+        configured = _config_value(self.ctx, "bot_name", "")
+        return str(configured).strip() or self._profile_id(kwargs)
+
+    def _bot_aliases(self, kwargs: dict[str, Any]) -> list[str]:
+        values = []
+        for key in ("bot_aliases", "agent_aliases"):
+            values.extend(self._string_values(kwargs.get(key)))
+        values.extend(self._string_values(_config_value(self.ctx, "bot_aliases", [])))
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+    def _bot_identities(self, kwargs: dict[str, Any]) -> list[str]:
+        values = []
+        for key in (
+            "bot_id",
+            "bot_name",
+            "agent_id",
+            "agent_name",
+            "profile_id",
+            "profile_name",
+        ):
+            values.extend(self._string_values(kwargs.get(key)))
+        values.extend(self._bot_aliases(kwargs))
+        values.extend(self._string_values(_config_value(self.ctx, "bot_name", "")))
+        values.extend(self._string_values(_config_value(self.ctx, "bot_id", "")))
+        values.append(self._profile_id(kwargs))
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
+
+    def _known_participants(self, kwargs: dict[str, Any]) -> list[str]:
+        values = []
+        for key in (
+            "known_participants",
+            "known_bots",
+            "participant_names",
+            "bot_names",
+            "participants",
+        ):
+            values.extend(self._string_values(kwargs.get(key)))
+        configured = _config_value(self.ctx, "known_participants", [])
+        values.extend(self._string_values(configured))
+        return list(dict.fromkeys(value.strip() for value in values if value.strip()))
 
     @staticmethod
     def _audit_snapshot(

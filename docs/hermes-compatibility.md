@@ -18,6 +18,13 @@ are ignored by the adapter, and missing optional fields use safe defaults.
 Version-specific branches belong at this boundary only when a public Hermes
 release documents a real contract difference and a versioned fixture covers it.
 
+The semantic classifier uses the documented `ctx.llm.complete_structured()`
+surface with no provider, model, agent, profile, or built-in task override. The
+host therefore resolves the active provider and its credentials, including an
+OAuth-backed provider, and applies the plugin's timeout. This source-level
+compatibility check confirms the public API shape; a deployed image still
+needs a real profile smoke test before semantic classification is enabled.
+
 Local fake-Hermes tests are the primary development contract. A real Hermes
 profile smoke test is a release-validation activity, not a requirement to
 reverse-engineer or hard-code one deployment.
@@ -43,9 +50,9 @@ fields:
 - session identity: `profile_id` or `profile_name`, and `session_id`
 - turn identity: optional `turn_id`
 - message identity: optional `user_message`, `sender_id`, `sender_kind`, and
-  `verified_user`
+  `verified_user`, plus optional bot/participant identity hints
 - configuration overrides: `state_dir`, `soul_path`, `state_gc_days`,
-  `shadow_mode`, and `admin_user_ids`
+  `shadow_mode`, `admin_user_ids`, and `semantic_classifier`
 - command arguments: `args_raw`, `args`, or a positional first argument
 - reset boundary: optional `new_session_id` or `replacement_session_id`
 
@@ -127,6 +134,12 @@ identity. The adapter therefore fails closed for administrative commands when
 no identity metadata is available. The local fixture also exercises an
 identity-enriched call so a future documented Hermes context extension can be
 supported without trusting identity values embedded in `raw_args`.
+
+The local runtime also guards against re-entry while a semantic secondary call
+is active. The current Hermes documentation describes `ctx.llm` as an
+out-of-band plugin call but does not specify hook recursion semantics, so this
+guard is a defensive compatibility measure rather than a claim about every
+deployment.
 
 ## Compatibility checks still needed
 

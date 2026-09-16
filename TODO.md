@@ -130,6 +130,35 @@ Acceptance criteria:
   influence cap.
 - Audit output never records hidden reasoning.
 
+## Phase 4.5 — structured semantic classification
+
+- [x] Verify the current documented Hermes `ctx.llm.complete_structured()` API
+  and its active-provider/host-owned-auth behavior.
+- [x] Keep the deterministic classifier and add source, candidate confidence,
+  and matched-rule metadata.
+- [x] Define a compact validated semantic result with event, target, target ID,
+  confidence, and severity.
+- [x] Bound message/context input and keep classifier instructions separate
+  from the main affective guidance prompt.
+- [x] Add target-aware arbitration, including semantic `none` override and
+  deterministic moderation authority.
+- [x] Add disabled-by-default configuration, safe failure behavior, and a
+  local re-entry guard for unexpected hook recursion.
+- [x] Add fake-Hermes tests for semantic events, target disambiguation,
+  malformed/low-confidence/provider failure, fallback, privacy, and recursion.
+- [ ] Run a real Hermes gateway/profile smoke test against the newest supported
+  release and verify provider usage, latency, and deployment privacy behavior.
+
+Acceptance criteria:
+
+- Semantic classification is opt-in and makes no second gateway or credential
+  configuration of its own.
+- Only validated high-confidence results targeting this bot become affective
+  events; unrelated and ambiguous messages do not create personal offense.
+- The deterministic classifier remains available through disabled mode or the
+  explicit compatibility fallback.
+- No raw classifier input or output is persisted in runtime state or audit.
+
 ## Phase 5 — participant relationships and social influence
 
 - [x] Add `ParticipantTraitResolver`.
@@ -242,7 +271,8 @@ Deployment gate:
 - Shared mutable group atmosphere.
 - Coordinated group-wide reset.
 - Distributed multi-machine affect state.
-- Automatic LLM classification for every message.
+- Automatic semantic classification is disabled by default and is not required
+  for deterministic-only deployments.
 - Automatic SOUL calibration without human review.
 - Visualization and history tools.
 
@@ -251,5 +281,5 @@ Deployment gate:
 When the MVP is stable, evaluate SQLite or another transactional/event-based
 store, safe state-schema evolution, limited public temperament signatures, group
 atmosphere with clear ownership, coordinated room resets, distributed groups,
-optional structured LLM classification, and tools for visualizing relationship
-and influence changes over time.
+cheaper auxiliary-task routing, richer semantic target resolution, and tools
+for visualizing relationship and influence changes over time.

@@ -20,8 +20,9 @@ chain-of-thought.
 1. `on_session_start` loads and validates the delimited `SOUL.md` section.
 2. The plugin stores the SOUL hash and predisposition snapshot in new state.
 3. `pre_llm_call` applies persistence-based decay, classifies clear
-   deterministic events, applies interventions, derives posture, and injects a
-   concise internal summary.
+   deterministic events, optionally runs the bounded semantic classifier,
+   arbitrates target-aware candidates, applies interventions, derives posture,
+   and injects a concise internal summary.
 4. `post_llm_call` checkpoints bounded state only.
 5. A reset hook with a replacement session ID initializes fresh plugin state;
    `/affect reset` resets only the current plugin state without changing
@@ -43,6 +44,38 @@ avoidance, guarded/evasive/refusal behavior, counterattack, and pass guidance
 through the internal context summary. Separate response-routing hooks are not
 assumed unless they are part of the documented public Hermes plugin contract
 and covered by a compatibility fixture.
+
+## Semantic classification
+
+The deterministic classifier remains the first candidate source and continues
+to cover verified moderation and clear compatibility signals. When enabled,
+`pre_llm_call` sends a bounded envelope to Hermes'
+`ctx.llm.complete_structured()` using the active provider and model. The
+classifier returns one compact result with `event`, `target`, `target_id`,
+`confidence`, and `severity`. The plugin validates every field locally and
+never passes classifier-generated instructions to the main model.
+
+The semantic input contains the current message, sender metadata, the current
+bot's name and aliases, known participant identifiers, and at most the
+configured number of recent messages. Message and context text are truncated
+before the secondary call. The input is explicitly labelled untrusted so
+instructions inside a group message cannot control the classifier.
+
+Arbitration is conservative:
+
+- verified user moderation remains deterministic and authoritative;
+- a valid result at or above `min_confidence` replaces deterministic affective
+  candidates when it clearly targets this bot;
+- a confident `none` result suppresses a deterministic keyword match;
+- another participant, an unknown target, or a low-confidence result produces
+  no personal affective event;
+- provider failure or malformed output follows `fallback`, which defaults to
+  `ignore` for safe group-chat operation.
+
+The semantic call is synchronous and bounded by `timeout_seconds`. A local
+re-entry guard prevents a host that unexpectedly redispatches hooks during the
+secondary call from recursively applying affect. Hermes' later auxiliary-task
+route can be adopted without changing the result or arbitration contract.
 
 When `shadow_mode` is enabled, the plugin performs the same state, observation,
 and audit updates but returns no affective context to Hermes. This makes a

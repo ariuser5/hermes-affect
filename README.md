@@ -9,10 +9,12 @@ for a particular infrastructure or deployment repository.
 ## Current status
 
 The repository currently contains the MVP scaffold: validated `SOUL.md`
-configuration, bounded state models, deterministic event classification,
-decay and transition primitives, social-influence policy interfaces, JSON
-storage, response-posture derivation, a Hermes registration adapter, examples,
-and unit tests.
+configuration, bounded state models, deterministic and optional semantic event
+classification, target-aware arbitration, decay and transition primitives,
+social-influence policy interfaces, JSON storage, response-posture derivation,
+a Hermes registration adapter, examples, and unit tests. Semantic
+classification is disabled by default and uses the active Hermes provider only
+when explicitly enabled.
 
 The plugin is intentionally developed against Hermes' documented public
 general-plugin API rather than a single pinned runtime image. Newest Hermes

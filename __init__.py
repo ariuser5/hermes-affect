@@ -3,7 +3,6 @@
 import sys
 from pathlib import Path
 
-
 # Hermes loads a user plugin's root ``__init__.py`` directly from its checkout.
 # Make the checkout importable before resolving the package implementation.
 _PLUGIN_ROOT = str(Path(__file__).resolve().parent)

@@ -4,6 +4,14 @@ Temporary affective state is scoped to a Hermes profile and session. It is
 stored separately from Hermes permanent memory and contains no raw transcript,
 long quotation, or hidden chain-of-thought.
 
+When semantic classification is enabled, the current bounded message and the
+configured small context window are sent to the active Hermes provider for the
+secondary structured call. The plugin does not persist those inputs, provider
+credentials, raw model output, or a classifier prompt. Only validated event
+metadata that leads to an affect update may appear in bounded audit records.
+Disable the feature or use `shadow_mode` when this provider call is not
+acceptable for a deployment's privacy review.
+
 The MVP records only bounded state, relationship dimensions, audit metadata,
 posture, revision timestamps, and the last processed turn identifier. State is
 subject to configurable garbage collection; the initial documented default is
