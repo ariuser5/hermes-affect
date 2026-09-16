@@ -40,6 +40,7 @@ class FakeHermesContext:
         self.llm = llm
         self.hooks: dict[str, Callable[..., Any]] = {}
         self.commands: dict[str, tuple[Callable[..., Any], str]] = {}
+        self.auxiliary_tasks: dict[str, dict[str, Any]] = {}
 
     def get_config(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)
@@ -51,6 +52,9 @@ class FakeHermesContext:
         self, name: str, callback: Callable[..., Any], description: str
     ) -> None:
         self.commands[name] = (callback, description)
+
+    def register_auxiliary_task(self, name: str, **metadata: Any) -> None:
+        self.auxiliary_tasks[name] = metadata
 
     def emit(self, name: str, **kwargs: Any) -> Any:
         return self.hooks[name](**kwargs)

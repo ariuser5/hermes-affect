@@ -24,27 +24,41 @@ context injection. Leave it disabled for normal context injection.
 Semantic classification is opt-in. A conservative test configuration is:
 
 ```yaml
-semantic_classifier:
-  enabled: true
-  mode: always
-  min_confidence: 0.85
-  timeout_seconds: 3
-  max_message_chars: 1200
-  max_context_messages: 2
-  fallback: ignore
-
-bot_name: lab-a
-bot_aliases: ["lab a"]
-shadow_mode: true
+plugins:
+  enabled:
+    - hermes-affect
+  entries:
+    hermes-affect:
+      settings:
+        semantic_classifier:
+          enabled: true
+          mode: always
+          min_confidence: 0.85
+          timeout_seconds: 3
+          max_message_chars: 1200
+          max_context_messages: 2
+          fallback: ignore
+        bot_name: lab-a
+        bot_aliases: ["lab a"]
+        shadow_mode: true
 ```
 
-The classifier uses Hermes' active provider and model through
-`ctx.llm.complete_structured()`; the plugin does not read or store provider
-credentials. `fallback: deterministic` is available as an explicit
-compatibility mode, while `ignore` is the safe group-chat default. The
-configuration accepts `bot_name`, `bot_aliases`, and known participant fields
-from the callback or plugin settings so target matching can distinguish this
-bot from another bot in the room.
+The classifier registers a plugin-owned auxiliary task. Configure its provider
+at the top level of Hermes' `config.yaml`; for a deployment authenticated with
+Codex OAuth, use:
+
+```yaml
+auxiliary:
+  hermes_affect_classifier:
+    provider: codex
+```
+
+The plugin does not read or store provider credentials. `fallback: deterministic`
+is available as an explicit compatibility mode, while `ignore` is the safe
+group-chat default. The configuration accepts `bot_name`,
+`bot_aliases`, and known participant fields from the callback or plugin
+settings so target matching can distinguish this bot from another bot in the
+room.
 
 The local fake-Hermes rollout smoke test exercises this operator flow without
 calling a real model:

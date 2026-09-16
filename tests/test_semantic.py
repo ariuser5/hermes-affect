@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 from hermes_affect.events import EventClassifier, EventType
-from hermes_affect.plugin import register
+from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, register
 from hermes_affect.semantic import (
     CLASSIFIER_INSTRUCTIONS,
     SemanticClassification,
@@ -155,6 +155,26 @@ class SemanticValidationTests(unittest.TestCase):
             )
             self.assertIsNone(outcome.classification)
             self.assertEqual(outcome.status, expected_status)
+
+    def test_classifier_fails_closed_when_task_registration_is_unavailable(self) -> None:
+        llm = FakePluginLlm(semantic_result("insult"))
+        context = FakeHermesContext(llm=llm)
+        classifier = SemanticClassifier(
+            context,
+            SemanticClassifierConfig(enabled=True),
+            task_name="hermes_affect_classifier",
+            task_registration_available=False,
+        )
+
+        outcome = classifier.classify(
+            "That was stupid",
+            sender_id="user:1",
+            sender_kind="user",
+            bot_name="lab-a",
+        )
+
+        self.assertEqual(outcome.status, "unavailable")
+        self.assertEqual(llm.calls, [])
 
 
 class SemanticArbitrationTests(unittest.TestCase):
@@ -319,6 +339,7 @@ class SemanticPluginIntegrationTests(unittest.TestCase):
         for message, event in messages:
             state, llm, _raw = self._run_message(semantic_result(event), message)
             self.assertEqual(len(llm.calls), 1)
+            self.assertEqual(llm.calls[0]["task"], SEMANTIC_CLASSIFIER_TASK)
             self.assertEqual(state["audit_records"][0]["event_type"], event)
             self.assertIn("user:1", state["relationships"])
 

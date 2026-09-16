@@ -26,6 +26,23 @@ from .semantic import (
 from .storage import DEFAULT_ABANDONED_STATE_DAYS, StateStore
 
 logger = logging.getLogger("hermes-affect")
+SEMANTIC_CLASSIFIER_TASK = "hermes_affect_classifier"
+
+
+def _register_semantic_classifier_task(ctx: Any) -> bool:
+    register_task = getattr(ctx, "register_auxiliary_task", None)
+    if not callable(register_task):
+        logger.warning(
+            "semantic_classification status=unavailable "
+            "reason=auxiliary_task_registration_missing"
+        )
+        return False
+    register_task(
+        SEMANTIC_CLASSIFIER_TASK,
+        display_name="Hermes Affect semantic classifier",
+        description="Bounded semantic event classification for hermes-affect.",
+    )
+    return True
 
 
 def _config_value(ctx: Any, key: str, default: Any) -> Any:
@@ -83,7 +100,11 @@ class AffectRuntime:
         )
         for warning in semantic_warnings:
             logger.warning("%s", warning)
-        self.semantic_classifier = SemanticClassifier(ctx, self.semantic_config)
+        self.semantic_classifier = SemanticClassifier(
+            ctx,
+            self.semantic_config,
+            task_name=SEMANTIC_CLASSIFIER_TASK,
+        )
         self._semantic_call_active = False
         self.config = neutral_config()
         self.soul_warnings: list[str] = []
@@ -542,6 +563,11 @@ def register(ctx: Any) -> None:
     """Register the general Hermes plugin surface."""
 
     runtime = AffectRuntime(ctx)
+    runtime.semantic_classifier.task_registration_available = (
+        _register_semantic_classifier_task(ctx)
+        if runtime.semantic_config.enabled
+        else True
+    )
     ctx.register_hook("on_session_start", runtime.on_session_start)
     ctx.register_hook("pre_llm_call", runtime.pre_llm_call)
     ctx.register_hook("post_llm_call", runtime.post_llm_call)

@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from hermes_affect.models import AffectState
-from hermes_affect.plugin import register
+from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, register
 from tests.fakes import FakeHermesContext
 
 
@@ -31,6 +31,22 @@ class PluginAdapterTests(unittest.TestCase):
             )
             self.assertIn("affect", context.commands)
             self.assertIn("session-scoped", context.commands["affect"][1])
+
+    def test_registers_semantic_classifier_auxiliary_task_when_enabled(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(
+                state_dir=temporary,
+                semantic_classifier={"enabled": True},
+            )
+            register(context)
+
+            self.assertEqual(
+                context.auxiliary_tasks[SEMANTIC_CLASSIFIER_TASK],
+                {
+                    "display_name": "Hermes Affect semantic classifier",
+                    "description": "Bounded semantic event classification for hermes-affect.",
+                },
+            )
 
     def test_lifecycle_persists_state_and_injects_internal_context(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

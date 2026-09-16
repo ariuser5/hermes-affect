@@ -19,11 +19,11 @@ Version-specific branches belong at this boundary only when a public Hermes
 release documents a real contract difference and a versioned fixture covers it.
 
 The semantic classifier uses the documented `ctx.llm.complete_structured()`
-surface with no provider, model, agent, profile, or built-in task override. The
-host therefore resolves the active provider and its credentials, including an
-OAuth-backed provider, and applies the plugin's timeout. This source-level
-compatibility check confirms the public API shape; a deployed image still
-needs a real profile smoke test before semantic classification is enabled.
+surface through a plugin-owned auxiliary task. Hermes resolves that task's
+configured provider and credentials, including an OAuth-backed provider, and
+applies the plugin's timeout. This avoids implicit built-in auxiliary-provider
+discovery. A deployed image still needs a real profile smoke test before
+semantic classification is enabled.
 
 Local fake-Hermes tests are the primary development contract. A real Hermes
 profile smoke test is a release-validation activity, not a requirement to
@@ -42,6 +42,7 @@ context fixture:
 ```python
 ctx.register_hook(name, callback)
 ctx.register_command(name, callback, description)
+ctx.register_auxiliary_task(name, display_name=..., description=...)
 ```
 
 The callbacks accept keyword payloads. The adapter currently recognizes these
@@ -63,6 +64,10 @@ Lifecycle hooks are registered for `on_session_start`, `pre_llm_call`,
 The adapter has no private Hermes imports and does not require Hermes internals
 at import time. Missing optional fields use the documented neutral/default
 behavior; a missing `session_id` means no state is loaded or created.
+When semantic classification is enabled, the adapter registers the
+`hermes_affect_classifier` auxiliary task and passes that task to the
+structured LLM call. If task registration is unavailable, the semantic path
+fails closed without making an implicit auxiliary-provider request.
 Local adapter tests exercise both command argument aliases (`args_raw` and
 `args`) and both reset replacement aliases (`new_session_id` and
 `replacement_session_id`). These are fixture coverage points, not confirmation

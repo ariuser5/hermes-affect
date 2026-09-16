@@ -144,6 +144,9 @@ Acceptance criteria:
   deterministic moderation authority.
 - [x] Add disabled-by-default configuration, safe failure behavior, and a
   local re-entry guard for unexpected hook recursion.
+- [x] Route semantic calls through a plugin-owned auxiliary task so the
+  operator can explicitly select the provider and avoid implicit provider
+  discovery.
 - [x] Add fake-Hermes tests for semantic events, target disambiguation,
   malformed/low-confidence/provider failure, fallback, privacy, and recursion.
 - [ ] Run a real Hermes gateway/profile smoke test against the newest supported
@@ -152,7 +155,8 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Semantic classification is opt-in and makes no second gateway or credential
-  configuration of its own.
+  configuration of its own; its provider route is explicit in Hermes'
+  top-level `auxiliary.hermes_affect_classifier` configuration.
 - Only validated high-confidence results targeting this bot become affective
   events; unrelated and ambiguous messages do not create personal offense.
 - The deterministic classifier remains available through disabled mode or the

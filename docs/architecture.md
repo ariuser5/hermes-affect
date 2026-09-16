@@ -50,10 +50,12 @@ and covered by a compatibility fixture.
 The deterministic classifier remains the first candidate source and continues
 to cover verified moderation and clear compatibility signals. When enabled,
 `pre_llm_call` sends a bounded envelope to Hermes'
-`ctx.llm.complete_structured()` using the active provider and model. The
-classifier returns one compact result with `event`, `target`, `target_id`,
-`confidence`, and `severity`. The plugin validates every field locally and
-never passes classifier-generated instructions to the main model.
+`ctx.llm.complete_structured()` through the plugin-owned
+`hermes_affect_classifier` auxiliary task. Hermes configuration controls the
+provider and model while credentials remain host-owned. The classifier returns
+one compact result with `event`, `target`, `target_id`, `confidence`, and
+`severity`. The plugin validates every field locally and never passes
+classifier-generated instructions to the main model.
 
 The semantic input contains the current message, sender metadata, the current
 bot's name and aliases, known participant identifiers, and at most the
@@ -74,8 +76,9 @@ Arbitration is conservative:
 
 The semantic call is synchronous and bounded by `timeout_seconds`. A local
 re-entry guard prevents a host that unexpectedly redispatches hooks during the
-secondary call from recursively applying affect. Hermes' later auxiliary-task
-route can be adopted without changing the result or arbitration contract.
+secondary call from recursively applying affect. If the host does not expose
+auxiliary-task registration, semantic classification fails closed as
+unavailable rather than falling back to an implicit provider route.
 
 When `shadow_mode` is enabled, the plugin performs the same state, observation,
 and audit updates but returns no affective context to Hermes. This makes a

@@ -366,9 +366,18 @@ def _result_parsed(result: Any) -> Any:
 class SemanticClassifier:
     """Call Hermes' out-of-band structured LLM lane and fail closed."""
 
-    def __init__(self, ctx: Any, config: SemanticClassifierConfig) -> None:
+    def __init__(
+        self,
+        ctx: Any,
+        config: SemanticClassifierConfig,
+        *,
+        task_name: str | None = None,
+        task_registration_available: bool = True,
+    ) -> None:
         self.ctx = ctx
         self.config = config
+        self.task_name = task_name
+        self.task_registration_available = task_registration_available
 
     def classify(
         self,
@@ -385,6 +394,12 @@ class SemanticClassifier:
             return SemanticOutcome(None, "disabled")
         if not message.strip():
             return SemanticOutcome(None, "empty_message")
+        if not self.task_registration_available:
+            logger.warning(
+                "semantic_classification status=unavailable "
+                "reason=auxiliary_task_registration_missing"
+            )
+            return SemanticOutcome(None, "unavailable")
         llm = getattr(self.ctx, "llm", None)
         complete_structured = getattr(llm, "complete_structured", None)
         if not callable(complete_structured):
@@ -401,16 +416,19 @@ class SemanticClassifier:
             config=self.config,
         )
         try:
-            result = complete_structured(
-                instructions=CLASSIFIER_INSTRUCTIONS,
-                input=[{"type": "text", "text": classifier_input}],
-                json_schema=SEMANTIC_CLASSIFICATION_SCHEMA,
-                schema_name="hermes-affect.semantic-event",
-                purpose="hermes-affect.semantic-classifier",
-                temperature=0.0,
-                max_tokens=128,
-                timeout=self.config.timeout_seconds,
-            )
+            call_kwargs: dict[str, Any] = {
+                "instructions": CLASSIFIER_INSTRUCTIONS,
+                "input": [{"type": "text", "text": classifier_input}],
+                "json_schema": SEMANTIC_CLASSIFICATION_SCHEMA,
+                "schema_name": "hermes-affect.semantic-event",
+                "purpose": "hermes-affect.semantic-classifier",
+                "temperature": 0.0,
+                "max_tokens": 128,
+                "timeout": self.config.timeout_seconds,
+            }
+            if self.task_name is not None:
+                call_kwargs["task"] = self.task_name
+            result = complete_structured(**call_kwargs)
         except Exception as exc:  # The host/provider boundary must fail open to chat.
             logger.warning(
                 "semantic_classification status=provider_failure error_type=%s",
