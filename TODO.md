@@ -279,6 +279,10 @@ Deployment gate:
 
 - [x] Extract `/affect` command parsing, interventions, and state rendering into
   a dedicated command module without changing the public registration adapter.
+- [x] Separate editable algorithm parameters and pure calculations from the
+  state-transition and posture modules.
+- [x] Move Hermes registration and hook wiring into a dedicated integration
+  adapter while preserving `hermes_affect.plugin:register` as the entry point.
 - [ ] Extract session lifecycle and state-loading orchestration from the Hermes
   adapter.
 - [ ] Extract callback identity resolution and participant targeting helpers.

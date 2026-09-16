@@ -2,12 +2,32 @@
 
 from __future__ import annotations
 
-import math
 from enum import Enum
 
+from .calculations import affect_intensity, effective_expression_drive
 from .config import AffectConfig
 from .events import AffectiveEvent, EventType
 from .models import AffectState
+from .parameters import (
+    ACTIVE_AFFECT_THRESHOLD,
+    COUNTERATTACK_ASSERTIVENESS_THRESHOLD,
+    COUNTERATTACK_DRIVE_THRESHOLD,
+    EVASIVE_ASSERTIVENESS_THRESHOLD,
+    EVASIVE_DRIVE_THRESHOLD,
+    GUARDED_AFFECT_THRESHOLD,
+    PLAYFUL_VALENCE_THRESHOLD,
+    REFUSAL_ASSERTIVENESS_THRESHOLD,
+    REFUSAL_OFFENDED_THRESHOLD,
+    TERSE_AFFECT_THRESHOLD,
+    WARM_VALENCE_THRESHOLD,
+)
+
+__all__ = [
+    "ResponsePosture",
+    "affect_intensity",
+    "effective_expression_drive",
+    "derive_posture",
+]
 
 
 class ResponsePosture(str, Enum):
@@ -26,37 +46,6 @@ class ResponsePosture(str, Enum):
     PASS = "pass"
 
 
-def affect_intensity(state: AffectState) -> float:
-    """Return the current normalized intensity available for expression."""
-
-    components = (
-        abs(state.valence),
-        state.arousal,
-        state.frustration,
-        state.offended,
-    )
-    return sum(components) / len(components)
-
-
-def effective_expression_drive(state: AffectState, config: AffectConfig) -> float:
-    """Map current affect to a smooth, normalized expression drive.
-
-    ``escalation_gain`` and ``repair_gain`` affect the state transitions that
-    produce ``state``; they are intentionally not applied again here.
-    """
-
-    expression_gain = config.tuning["expression_gain"]
-    temperament = (
-        0.30 * config.traits["reactivity"]
-        + 0.25 * config.traits["pride"]
-        + 0.20 * config.traits["assertiveness"]
-        + 0.15 * config.traits["persistence"]
-        + 0.10 * config.traits["playfulness"]
-    )
-    k = expression_gain * (0.5 + 1.5 * temperament)
-    return -math.expm1(-k * affect_intensity(state))
-
-
 def derive_posture(
     state: AffectState,
     config: AffectConfig,
@@ -72,28 +61,35 @@ def derive_posture(
             return ResponsePosture.RECONCILIATION
         if event.event_type == EventType.USER_MODERATION and event.action == "calm":
             return ResponsePosture.PASS
-    if state.active_sensitivities and (state.frustration > 0.30 or state.offended > 0.30):
+    if state.active_sensitivities and (
+        state.frustration > ACTIVE_AFFECT_THRESHOLD or state.offended > ACTIVE_AFFECT_THRESHOLD
+    ):
         return ResponsePosture.TOPIC_AVOIDANCE
-    if state.open_conflicts and (state.frustration > 0.30 or state.offended > 0.30):
+    if state.open_conflicts and (
+        state.frustration > ACTIVE_AFFECT_THRESHOLD or state.offended > ACTIVE_AFFECT_THRESHOLD
+    ):
         if (
-            expression_drive >= 0.65
-            and config.traits["assertiveness"] >= 0.55
+            expression_drive >= COUNTERATTACK_DRIVE_THRESHOLD
+            and config.traits["assertiveness"] >= COUNTERATTACK_ASSERTIVENESS_THRESHOLD
         ):
             return ResponsePosture.COUNTERATTACK
-        if state.offended > 0.65 and config.traits["assertiveness"] < 0.40:
+        if (
+            state.offended > REFUSAL_OFFENDED_THRESHOLD
+            and config.traits["assertiveness"] < REFUSAL_ASSERTIVENESS_THRESHOLD
+        ):
             return ResponsePosture.REFUSAL
         if (
-            expression_drive <= 0.35
-            and config.traits["assertiveness"] < 0.40
+            expression_drive <= EVASIVE_DRIVE_THRESHOLD
+            and config.traits["assertiveness"] < EVASIVE_ASSERTIVENESS_THRESHOLD
         ):
             return ResponsePosture.EVASIVE
         return ResponsePosture.GUARDED
-    if state.frustration > 0.65 or state.offended > 0.65:
+    if state.frustration > TERSE_AFFECT_THRESHOLD or state.offended > TERSE_AFFECT_THRESHOLD:
         return ResponsePosture.TERSE
-    if state.frustration > 0.45:
+    if state.frustration > GUARDED_AFFECT_THRESHOLD:
         return ResponsePosture.GUARDED
-    if state.valence > 0.45:
-        if config.traits["playfulness"] > 0.65:
+    if state.valence > WARM_VALENCE_THRESHOLD:
+        if config.traits["playfulness"] > PLAYFUL_VALENCE_THRESHOLD:
             return ResponsePosture.PLAYFUL
         return ResponsePosture.WARM
     return ResponsePosture.NORMAL_ENGAGEMENT

@@ -2,12 +2,65 @@
 
 from __future__ import annotations
 
-import math
 from datetime import datetime, timezone
 
+from .calculations import (
+    event_severity,
+    global_decay_factor,
+    playful_signal_factor,
+    pride_sensitivity,
+    reactivity_factor,
+    relation_decay_factor,
+    sensitivity_multiplier,
+    teasing_misunderstanding,
+)
 from .config import AffectConfig
 from .events import AffectiveEvent, EventType
 from .models import AffectState, ParticipantRelation, clamp, utc_now
+from .parameters import (
+    AFFINITY_GAIN,
+    CONFLICT_CLEARED_TENSION_THRESHOLD,
+    DISAGREEMENT_AROUSAL_GAIN,
+    DISAGREEMENT_FRUSTRATION_GAIN,
+    DISAGREEMENT_TENSION_GAIN,
+    INSULT_AROUSAL_GAIN,
+    INSULT_FRUSTRATION_GAIN,
+    INSULT_IRRITATION_GAIN,
+    INSULT_OFFENDED_GAIN,
+    INSULT_TENSION_GAIN,
+    INSULT_VALENCE_GAIN,
+    IRRITATION_RELIEF_FROM_POSITIVE_SIGNAL,
+    JOKE_AFFINITY_GAIN,
+    JOKE_BASE_GAIN,
+    JOKE_FRUSTRATION_GAIN,
+    LEADERSHIP_CHALLENGE_BASE_GAIN,
+    LEADERSHIP_CHALLENGE_RESPECT_LOSS,
+    LEADERSHIP_CHALLENGE_TENSION_GAIN,
+    MEDIATION_AROUSAL_RELIEF,
+    MEDIATION_FRUSTRATION_RELIEF,
+    MEDIATION_RESPECT_GAIN,
+    MODERATION_CALM_AROUSAL_RELIEF,
+    MODERATION_CALM_FRUSTRATION_RELIEF,
+    MODERATION_CALM_IRRITATION_RELIEF,
+    MODERATION_CALM_OFFENDED_RELIEF,
+    MODERATION_CALM_TENSION_RELIEF,
+    MODERATION_HEAT_AROUSAL_GAIN,
+    MODERATION_HEAT_FRUSTRATION_GAIN,
+    PRAISE_AROUSAL_GAIN,
+    PRAISE_VALENCE_GAIN,
+    REPAIR_AROUSAL_RELIEF,
+    REPAIR_FRUSTRATION_RELIEF,
+    REPAIR_IRRITATION_RELIEF,
+    REPAIR_OFFENDED_RELIEF,
+    REPAIR_TENSION_RELIEF,
+    REPAIR_VALENCE_GAIN,
+    SERIOUS_JOKE_IRRITATION_GAIN,
+    SERIOUS_JOKE_PLAYFULNESS_THRESHOLD,
+    TEASING_BASE_GAIN,
+    TEASING_IRRITATION_GAIN,
+    TEASING_TENSION_GAIN,
+    TRUST_GAIN,
+)
 
 
 def _relation(state: AffectState, participant_id: str) -> ParticipantRelation:
@@ -21,82 +74,70 @@ def _change(state: AffectState, *, valence=0.0, arousal=0.0, frustration=0.0, of
     state.offended = clamp(state.offended + offended, 0.0, 1.0)
 
 
-def _severity(event: AffectiveEvent) -> float:
-    value = event.attributes.get("severity", "normal").lower()
-    if value in {"low", "mild"}:
-        return 0.5
-    if value in {"high", "severe"}:
-        return 1.75 if value == "high" else 2.5
-    try:
-        return max(0.0, min(float(value), 5.0))
-    except ValueError:
-        return 1.0
-
-
-def _sensitivity_multiplier(config: AffectConfig, event: AffectiveEvent) -> float:
-    topic = event.attributes.get("topic", "").strip().lower()
-    if not topic:
-        return 1.0
-    matching = [item.intensity for item in config.sensitivities if item.topic.lower() in topic]
-    return 1.0 + max(matching, default=0.0)
-
-
 def apply_event(state: AffectState, event: AffectiveEvent, config: AffectConfig) -> str:
     """Apply one event and return the inspectable rule name that fired."""
 
     escalation_gain = config.tuning["escalation_gain"]
     repair_gain = config.tuning["repair_gain"]
-    reactivity = 0.25 + 0.75 * config.traits["reactivity"]
-    pride_sensitivity = 0.40 + 0.60 * config.traits["pride"]
-    sensitivity = _sensitivity_multiplier(config, event)
+    reactivity = reactivity_factor(config)
+    pride_factor = pride_sensitivity(config)
+    sensitivity = sensitivity_multiplier(config, event)
     relation = _relation(state, event.speaker_id)
 
     if event.event_type in {EventType.PRAISE, EventType.SUPPORT}:
-        _change(state, valence=0.12, arousal=0.04)
-        relation.trust = clamp(relation.trust + 0.08)
-        relation.affinity = clamp(relation.affinity + 0.10)
-        relation.irritation = clamp(relation.irritation - 0.04, 0.0, 1.0)
+        _change(state, valence=PRAISE_VALENCE_GAIN, arousal=PRAISE_AROUSAL_GAIN)
+        relation.trust = clamp(relation.trust + TRUST_GAIN)
+        relation.affinity = clamp(relation.affinity + AFFINITY_GAIN)
+        relation.irritation = clamp(
+            relation.irritation - IRRITATION_RELIEF_FROM_POSITIVE_SIGNAL, 0.0, 1.0
+        )
         return "positive_social_signal"
     if event.event_type == EventType.JOKE:
         playfulness = config.traits["playfulness"]
         _change(
             state,
-            valence=0.08 * (0.35 + 0.65 * playfulness),
-            arousal=0.08 * (0.35 + 0.65 * playfulness),
-            frustration=0.05 * (1.0 - playfulness),
+            valence=JOKE_BASE_GAIN * playful_signal_factor(playfulness),
+            arousal=JOKE_BASE_GAIN * playful_signal_factor(playfulness),
+            frustration=JOKE_FRUSTRATION_GAIN * (1.0 - playfulness),
         )
-        relation.affinity = clamp(relation.affinity + 0.05 * (0.35 + 0.65 * playfulness))
-        if playfulness < 0.35:
-            relation.irritation = clamp(relation.irritation + 0.04, 0.0, 1.0)
+        relation.affinity = clamp(
+            relation.affinity + JOKE_AFFINITY_GAIN * playful_signal_factor(playfulness)
+        )
+        if playfulness < SERIOUS_JOKE_PLAYFULNESS_THRESHOLD:
+            relation.irritation = clamp(
+                relation.irritation + SERIOUS_JOKE_IRRITATION_GAIN, 0.0, 1.0
+            )
             return "serious_joke_interpretation"
         return "playful_signal"
     if event.event_type == EventType.TEASING:
-        misunderstanding = 0.35 + 0.65 * (1.0 - config.traits["playfulness"])
-        amount = 0.08 * escalation_gain * reactivity * misunderstanding
+        misunderstanding = teasing_misunderstanding(config.traits["playfulness"])
+        amount = TEASING_BASE_GAIN * escalation_gain * reactivity * misunderstanding
         _change(state, arousal=amount, frustration=amount)
         relation.irritation = clamp(
-            relation.irritation + 0.10 * escalation_gain * misunderstanding,
+            relation.irritation + TEASING_IRRITATION_GAIN * escalation_gain * misunderstanding,
             0.0,
             1.0,
         )
         relation.unresolved_tension = clamp(
-            relation.unresolved_tension + 0.08 * escalation_gain * misunderstanding,
+            relation.unresolved_tension + TEASING_TENSION_GAIN * escalation_gain * misunderstanding,
             0.0,
             1.0,
         )
         return "teasing_tension"
     if event.event_type in {EventType.INSULT, EventType.BOT_PROVOCATION}:
-        impact = _severity(event) * escalation_gain * reactivity * pride_sensitivity * sensitivity
+        impact = event_severity(event) * escalation_gain * reactivity * pride_factor * sensitivity
         _change(
             state,
-            valence=-0.18 * impact,
-            arousal=0.18 * impact,
-            frustration=0.20 * impact,
-            offended=0.24 * impact,
+            valence=-INSULT_VALENCE_GAIN * impact,
+            arousal=INSULT_AROUSAL_GAIN * impact,
+            frustration=INSULT_FRUSTRATION_GAIN * impact,
+            offended=INSULT_OFFENDED_GAIN * impact,
         )
-        relation.irritation = clamp(relation.irritation + 0.22 * impact, 0.0, 1.0)
+        relation.irritation = clamp(
+            relation.irritation + INSULT_IRRITATION_GAIN * impact, 0.0, 1.0
+        )
         relation.unresolved_tension = clamp(
-            relation.unresolved_tension + 0.25 * impact,
+            relation.unresolved_tension + INSULT_TENSION_GAIN * impact,
             0.0,
             1.0,
         )
@@ -107,10 +148,14 @@ def apply_event(state: AffectState, event: AffectiveEvent, config: AffectConfig)
         }
         return "direct_offense"
     if event.event_type == EventType.DISAGREEMENT:
-        amount = 0.06 * escalation_gain * reactivity
-        _change(state, arousal=amount, frustration=0.08 * escalation_gain * reactivity)
+        amount = DISAGREEMENT_AROUSAL_GAIN * escalation_gain * reactivity
+        _change(
+            state,
+            arousal=amount,
+            frustration=DISAGREEMENT_FRUSTRATION_GAIN * escalation_gain * reactivity,
+        )
         relation.unresolved_tension = clamp(
-            relation.unresolved_tension + 0.08 * escalation_gain * reactivity,
+            relation.unresolved_tension + DISAGREEMENT_TENSION_GAIN * escalation_gain * reactivity,
             0.0,
             1.0,
         )
@@ -118,39 +163,59 @@ def apply_event(state: AffectState, event: AffectiveEvent, config: AffectConfig)
     if event.event_type in {EventType.APOLOGY, EventType.RECONCILIATION}:
         _change(
             state,
-            valence=0.10 * repair_gain,
-            arousal=-0.08 * repair_gain,
-            frustration=-0.16 * repair_gain,
-            offended=-0.20 * repair_gain,
+            valence=REPAIR_VALENCE_GAIN * repair_gain,
+            arousal=-REPAIR_AROUSAL_RELIEF * repair_gain,
+            frustration=-REPAIR_FRUSTRATION_RELIEF * repair_gain,
+            offended=-REPAIR_OFFENDED_RELIEF * repair_gain,
         )
-        relation.irritation = clamp(relation.irritation - 0.20 * repair_gain, 0.0, 1.0)
+        relation.irritation = clamp(
+            relation.irritation - REPAIR_IRRITATION_RELIEF * repair_gain, 0.0, 1.0
+        )
         relation.unresolved_tension = clamp(
-            relation.unresolved_tension - 0.24 * repair_gain,
+            relation.unresolved_tension - REPAIR_TENSION_RELIEF * repair_gain,
             0.0,
             1.0,
         )
-        if relation.unresolved_tension < 0.15:
+        if relation.unresolved_tension < CONFLICT_CLEARED_TENSION_THRESHOLD:
             state.open_conflicts.pop(event.speaker_id, None)
         return "repair_signal"
     if event.event_type == EventType.USER_MODERATION:
         if event.action == "calm":
-            _change(state, arousal=-0.25, frustration=-0.30, offended=-0.20)
+            _change(
+                state,
+                arousal=-MODERATION_CALM_AROUSAL_RELIEF,
+                frustration=-MODERATION_CALM_FRUSTRATION_RELIEF,
+                offended=-MODERATION_CALM_OFFENDED_RELIEF,
+            )
             for item in state.relationships.values():
-                item.irritation = clamp(item.irritation - 0.18, 0.0, 1.0)
-                item.unresolved_tension = clamp(item.unresolved_tension - 0.20, 0.0, 1.0)
+                item.irritation = clamp(
+                    item.irritation - MODERATION_CALM_IRRITATION_RELIEF, 0.0, 1.0
+                )
+                item.unresolved_tension = clamp(
+                    item.unresolved_tension - MODERATION_CALM_TENSION_RELIEF, 0.0, 1.0
+                )
             return "verified_user_calm"
-        _change(state, arousal=0.18, frustration=0.10)
+        _change(
+            state,
+            arousal=MODERATION_HEAT_AROUSAL_GAIN,
+            frustration=MODERATION_HEAT_FRUSTRATION_GAIN,
+        )
         return "verified_user_heat"
     if event.event_type == EventType.BOT_MEDIATION:
-        _change(state, arousal=-0.12, frustration=-0.12)
-        relation.respect = clamp(relation.respect + 0.05)
+        _change(
+            state,
+            arousal=-MEDIATION_AROUSAL_RELIEF,
+            frustration=-MEDIATION_FRUSTRATION_RELIEF,
+        )
+        relation.respect = clamp(relation.respect + MEDIATION_RESPECT_GAIN)
         return "social_mediation"
     if event.event_type == EventType.LEADERSHIP_CHALLENGE:
-        amount = 0.10 * escalation_gain * reactivity
+        amount = LEADERSHIP_CHALLENGE_BASE_GAIN * escalation_gain * reactivity
         _change(state, arousal=amount, frustration=amount)
-        relation.respect = clamp(relation.respect - 0.08)
+        relation.respect = clamp(relation.respect - LEADERSHIP_CHALLENGE_RESPECT_LOSS)
         relation.unresolved_tension = clamp(
-            relation.unresolved_tension + 0.10 * escalation_gain * reactivity,
+            relation.unresolved_tension
+            + LEADERSHIP_CHALLENGE_TENSION_GAIN * escalation_gain * reactivity,
             0.0,
             1.0,
         )
@@ -166,16 +231,13 @@ def decay_state(state: AffectState, config: AffectConfig, elapsed_hours: float) 
 
     if elapsed_hours <= 0:
         return
-    persistence = config.traits["persistence"]
-    global_rate = 0.20 + 0.80 * (1.0 - persistence)
-    global_factor = math.exp(-global_rate * elapsed_hours)
+    global_factor = global_decay_factor(config, elapsed_hours)
     state.valence *= global_factor
     state.arousal *= global_factor
     state.frustration *= global_factor
     state.offended *= global_factor
 
-    relation_rate = 0.08 + 0.42 * (1.0 - persistence)
-    relation_factor = math.exp(-relation_rate * elapsed_hours)
+    relation_factor = relation_decay_factor(config, elapsed_hours)
     for relation in state.relationships.values():
         relation.irritation *= relation_factor
         relation.unresolved_tension *= relation_factor

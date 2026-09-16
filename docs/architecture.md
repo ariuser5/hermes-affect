@@ -8,6 +8,27 @@ directory. A lock file protects each state file, and writes use a temporary file
 plus atomic replacement. Runtime state is not source code and must not be
 committed.
 
+## Code layout and tuning surface
+
+The Hermes-facing entry point remains `hermes_affect.plugin:register`, but the
+compatibility module is intentionally thin. Host hook and command registration
+lives in `hermes_affect/integration/adapter.py`; runtime orchestration lives in
+`hermes_affect/runtime.py`.
+
+The algorithm is separated from that integration layer:
+
+- `hermes_affect/parameters.py` contains the editable coefficients, weights,
+  and posture thresholds. Change these values to tune the algorithm globally.
+- `hermes_affect/calculations.py` contains the pure formulas, including event
+  severity, trait factors, exponential decay, expression drive, and social
+  influence factors.
+- `hermes_affect/dynamics.py`, `posture.py`, and `influence.py` apply those
+  formulas to state transitions and decisions.
+
+For a single bot, prefer `SOUL.md` traits and tuning first. Edit
+`parameters.py` when changing the shared behavior of all bots, then run the
+focused test suite before deploying.
+
 The state contains bounded global affect, participant-specific relationships,
 open conflict metadata, posture, bounded audit records, revision information,
 and the last processed turn identifier. Audit records contain event type, rule,
