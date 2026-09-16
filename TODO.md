@@ -213,6 +213,8 @@ Acceptance criteria:
 
 - [x] Register the `/affect` command surface.
 - [x] Implement `/affect status` as administrative debug output.
+- [x] Implement public `/affect state [profile]` inspection as a current-state
+  snapshot without journal or history output.
 - [x] Implement `/affect reset` without changing Hermes session state.
 - [x] Implement `/affect calm`.
 - [x] Implement `/affect heat`.
@@ -228,7 +230,8 @@ Acceptance criteria:
 Acceptance criteria:
 
 - Administrative commands affect only plugin state.
-- Unverified or bot-originated commands are rejected.
+- Mutating unverified or bot-originated commands are rejected; the read-only
+  experimental state snapshot is intentionally public.
 - Natural interventions use social/administrative authority appropriately.
 
 ## Phase 8 — lifecycle, compression, and recovery
@@ -271,6 +274,16 @@ Deployment gate:
 - No Hermes permanent-memory setting is changed automatically.
 - No source or runtime data is placed in Git.
 - Deployment changes are reviewed separately from plugin implementation.
+
+## Refactoring track
+
+- [x] Extract `/affect` command parsing, interventions, and state rendering into
+  a dedicated command module without changing the public registration adapter.
+- [ ] Extract session lifecycle and state-loading orchestration from the Hermes
+  adapter.
+- [ ] Extract callback identity resolution and participant targeting helpers.
+- [ ] Extract affect observation/audit bookkeeping from the runtime pipeline.
+- [ ] Extract injected-context rendering from state transition orchestration.
 
 ## Explicit MVP non-goals
 

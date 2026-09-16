@@ -91,6 +91,13 @@ An administrator can temporarily override one of the three tuning values for
 the active plugin session with `/affect tune <field> <value>`. Only the three
 tuning fields are accepted; core traits and `SOUL.md` are not modified.
 
+During development, `/affect state [profile]` returns the selected profile's
+current affect snapshot, including mood, posture, numerical affect, current
+relationships, and derived `expression_drive`. It intentionally omits audit
+records and participant history from the response. This diagnostic is public
+only for the current experiment and should be removed or protected before
+exposing the bot to untrusted users.
+
 The plugin reads numeric affect configuration only from the explicitly
 delimited `session_affect` YAML section in `SOUL.md`. It does not ask an LLM to
 extract settings from the surrounding persona prose. Any future calibration
