@@ -108,7 +108,10 @@ for `expression_gain`, `escalation_gain`, or `repair_gain` within `[0, 10]`.
 During development, `/affect state [profile]` is a read-only public diagnostic
 command. It loads the newest valid persisted session for the selected profile
 and returns the bounded state payload together with the derived
-`expression_drive`; it does not read or persist raw messages.
+`expression_drive`. The response contains only the current affect, posture,
+relationships, sensitivities, conflicts, and tuning overrides; it excludes
+audit records and observed-participant history and does not read or persist raw
+messages.
 Overrides are persisted with plugin state, do not alter `SOUL.md`, and cannot
 change core traits or Hermes configuration.
 

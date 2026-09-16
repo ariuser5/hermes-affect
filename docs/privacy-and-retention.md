@@ -62,11 +62,12 @@ Administrative status and mutating commands remain separate from normal
 response context and must verify the configured user identity. The experimental
 read-only `/affect state [profile]` command is intentionally public during the
 current development phase: it returns the selected profile's newest valid,
-bounded state file plus the derived expression drive. It can expose numerical
-affect, relationships, observed-participant metadata, and bounded audit
-metadata, but the state model does not contain raw messages or classifier
-prompts. Disable or remove this public diagnostic before exposing the command
-to untrusted users.
+bounded current-state snapshot plus the derived expression drive. It can expose
+numerical affect, current relationships, active sensitivities, open conflicts,
+and tuning overrides, but excludes audit records and observed-participant
+history. The state model does not contain raw messages or classifier prompts.
+Disable or remove this public diagnostic before exposing the command to
+untrusted users.
 
 Any future public temperament signature must be opt-in and limited to coarse,
 reviewed categories for playfulness, assertiveness, and social influence. It

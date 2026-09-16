@@ -407,8 +407,34 @@ class AffectRuntime:
             config,
             tuning={**config.tuning, **state.tuning_overrides},
         )
-        payload = state.to_dict()
-        payload["expression_drive"] = effective_expression_drive(state, config)
+        payload = {
+            "profile_id": state.profile_id,
+            "session_id": state.session_id,
+            "revision": state.revision,
+            "updated_at": state.updated_at,
+            "mood": state.mood,
+            "response_posture": state.response_posture,
+            "expression_drive": effective_expression_drive(state, config),
+            "affect": {
+                "valence": state.valence,
+                "arousal": state.arousal,
+                "frustration": state.frustration,
+                "offended": state.offended,
+            },
+            "relationships": {
+                participant_id: {
+                    "trust": relation.trust,
+                    "affinity": relation.affinity,
+                    "irritation": relation.irritation,
+                    "respect": relation.respect,
+                    "unresolved_tension": relation.unresolved_tension,
+                }
+                for participant_id, relation in state.relationships.items()
+            },
+            "active_sensitivities": list(state.active_sensitivities),
+            "open_conflicts": dict(state.open_conflicts),
+            "tuning_overrides": dict(state.tuning_overrides),
+        }
         return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
 
     @staticmethod

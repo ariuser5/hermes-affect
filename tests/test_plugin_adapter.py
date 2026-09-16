@@ -848,9 +848,11 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertEqual(state["profile_id"], "bot:one")
             self.assertEqual(state["session_id"], "session:one")
             self.assertEqual(state["revision"], 1)
-            self.assertGreater(state["offended"], 0.0)
+            self.assertGreater(state["affect"]["offended"], 0.0)
             self.assertIn("expression_drive", state)
-            self.assertIn("audit_records", state)
+            self.assertIn("relationships", state)
+            self.assertNotIn("audit_records", state)
+            self.assertNotIn("observed_participants", state)
 
     def test_natural_moderation_changes_state_only_for_verified_user(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
