@@ -81,6 +81,26 @@ class StateStore:
         except FileNotFoundError:
             return None
 
+    def latest_for_profile(self, profile_id: str) -> AffectState | None:
+        """Load the most recently updated valid session for a profile."""
+
+        sessions_root = self.root / _path_component(profile_id) / "sessions"
+        if not sessions_root.is_dir():
+            return None
+
+        latest: AffectState | None = None
+        latest_updated_at: datetime | None = None
+        for path in sessions_root.glob("*.json"):
+            try:
+                state = self._load_path(path)
+                updated_at = self._updated_at(state)
+            except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
+                continue
+            if latest_updated_at is None or updated_at > latest_updated_at:
+                latest = state
+                latest_updated_at = updated_at
+        return latest
+
     @staticmethod
     def _load_path(path: Path) -> AffectState:
         with path.open("r", encoding="utf-8") as handle:

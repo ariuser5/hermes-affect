@@ -58,12 +58,15 @@ the omission of numerical state or raw messages are the available privacy
 controls. A deployment that requires request-only visibility must validate a
 documented request-level hook separately before enabling that design.
 
-Administrative status/debug output is separate from normal response context.
-Administrative commands must verify the configured user identity. Hermes'
-current public slash-command contract supplies only raw arguments, so the
-plugin rejects administrative commands when no authenticated identity context
-is available. A bot's message is social influence, not administrative
-authority.
+Administrative status and mutating commands remain separate from normal
+response context and must verify the configured user identity. The experimental
+read-only `/affect state [profile]` command is intentionally public during the
+current development phase: it returns the selected profile's newest valid,
+bounded state file plus the derived expression drive. It can expose numerical
+affect, relationships, observed-participant metadata, and bounded audit
+metadata, but the state model does not contain raw messages or classifier
+prompts. Disable or remove this public diagnostic before exposing the command
+to untrusted users.
 
 Any future public temperament signature must be opt-in and limited to coarse,
 reviewed categories for playfulness, assertiveness, and social influence. It

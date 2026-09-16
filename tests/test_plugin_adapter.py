@@ -820,6 +820,38 @@ class PluginAdapterTests(unittest.TestCase):
             )
             self.assertIn("session=session:one", allowed)
 
+    def test_state_command_returns_latest_profile_state_without_admin_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            context = FakeHermesContext(state_dir=temporary)
+            register(context)
+            base = {
+                "profile_id": "bot:one",
+                "session_id": "session:one",
+                "sender_id": "user:1",
+            }
+
+            context.emit("on_session_start", **base)
+            context.emit(
+                "pre_llm_call",
+                **base,
+                user_message="you are an idiot",
+                turn_id="turn:one",
+            )
+
+            raw_state = context.invoke_command(
+                "affect",
+                args_raw="state bot:one",
+                profile_id="bot:one",
+            )
+            state = json.loads(raw_state)
+
+            self.assertEqual(state["profile_id"], "bot:one")
+            self.assertEqual(state["session_id"], "session:one")
+            self.assertEqual(state["revision"], 1)
+            self.assertGreater(state["offended"], 0.0)
+            self.assertIn("expression_drive", state)
+            self.assertIn("audit_records", state)
+
     def test_natural_moderation_changes_state_only_for_verified_user(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)

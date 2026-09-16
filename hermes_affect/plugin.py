@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
 import os
@@ -320,11 +321,18 @@ class AffectRuntime:
         logger.info("session finalized for session=%s", kwargs.get("session_id"))
 
     def command(self, *args: Any, **kwargs: Any) -> str:
-        if not self._is_verified_admin(kwargs):
-            return "Affect administration requires a verified user identity."
         raw_args = kwargs.get("args_raw") or kwargs.get("args") or (args[0] if args else "status")
         parts = str(raw_args).split()
         action = parts[0] if parts else "status"
+
+        if action == "state":
+            if len(parts) > 2:
+                return "Usage: /affect state [profile]"
+            profile_id = parts[1] if len(parts) == 2 else self._profile_id(kwargs)
+            return self._state_debug(profile_id, kwargs)
+
+        if not self._is_verified_admin(kwargs):
+            return "Affect administration requires a verified user identity."
         state = self._state(kwargs)
         if state is None:
             return "No active Hermes session was supplied."
@@ -369,7 +377,7 @@ class AffectRuntime:
             state.revision += 1
             self.store.save(state)
             return f"Session tuning override set: {name}={value:g}."
-        return "Usage: /affect status|reset|calm|heat|tune"
+        return "Usage: /affect state [profile] | status|reset|calm|heat|tune"
 
     def _is_verified_admin(self, kwargs: dict[str, Any]) -> bool:
         sender_id = str(kwargs.get("sender_id") or "")
@@ -384,6 +392,24 @@ class AffectRuntime:
         tuning = dict(self.config.tuning)
         tuning.update(state.tuning_overrides)
         return replace(self.config, tuning=tuning)
+
+    def _state_debug(self, profile_id: str, kwargs: dict[str, Any]) -> str:
+        state = None
+        if profile_id == self._profile_id(kwargs):
+            state = self._state(kwargs)
+        if state is None:
+            state = self.store.latest_for_profile(profile_id)
+        if state is None:
+            return f"No affect state found for profile={profile_id}."
+
+        config, _ = self._load_config(kwargs)
+        config = replace(
+            config,
+            tuning={**config.tuning, **state.tuning_overrides},
+        )
+        payload = state.to_dict()
+        payload["expression_drive"] = effective_expression_drive(state, config)
+        return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
 
     @staticmethod
     def _string_values(value: Any) -> list[str]:
