@@ -59,6 +59,7 @@ from .parameters import (
     TEASING_BASE_GAIN,
     TEASING_IRRITATION_GAIN,
     TEASING_TENSION_GAIN,
+    TOPIC_STEERING_RESPECT_GAIN,
     TRUST_GAIN,
 )
 
@@ -221,7 +222,7 @@ def apply_event(state: AffectState, event: AffectiveEvent, config: AffectConfig)
         )
         return "leadership_challenge"
     if event.event_type == EventType.TOPIC_STEERING:
-        relation.respect = clamp(relation.respect + 0.02)
+        relation.respect = clamp(relation.respect + TOPIC_STEERING_RESPECT_GAIN)
         return "topic_steering"
     return "unhandled_event"
 

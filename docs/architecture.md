@@ -29,6 +29,38 @@ For a single bot, prefer `SOUL.md` traits and tuning first. Edit
 `parameters.py` when changing the shared behavior of all bots, then run the
 focused test suite before deploying.
 
+### How to read the tuning values
+
+The names describe the role of each value rather than exposing one large
+opaque formula. For example, insult impact is calculated conceptually as:
+
+```text
+impact = severity × escalation_gain × reactivity_factor
+         × pride_sensitivity × topic_sensitivity
+```
+
+`reactivity_factor` uses `REACTIVITY_BASE` and
+`REACTIVITY_TRAIT_WEIGHT`; `pride_sensitivity` uses the corresponding pride
+pair. The event-specific `INSULT_*_GAIN` values then distribute that impact
+across valence, arousal, frustration, offense, and relationship tension. For
+example, increasing `INSULT_OFFENDED_GAIN` makes the same insult increase
+offense more than frustration without changing the other dimensions.
+
+Expression uses a different runtime formula. The current affect produces an
+intensity `x`, the expression-related trait weights produce temperament `t`,
+and then:
+
+```text
+k = expression_gain × (EXPRESSION_CURVE_BASE
+                       + EXPRESSION_CURVE_TEMPERAMENT_WEIGHT × t)
+expression_drive = 1 - exp(-k × x)
+```
+
+So `EXPRESSION_*_WEIGHT` values change how personality affects expression,
+while `CONTEXT_*_DRIVE_THRESHOLD` values change when the wording tier changes.
+The former changes the curve; the latter changes the boundaries between
+measured, firm, skeptical, and intense guidance.
+
 The state contains bounded global affect, participant-specific relationships,
 open conflict metadata, posture, bounded audit records, revision information,
 and the last processed turn identifier. Audit records contain event type, rule,
