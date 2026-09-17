@@ -5,8 +5,8 @@ from __future__ import annotations
 import re
 from dataclasses import replace
 
-from .config import AffectConfig
-from .events import AffectiveEvent, EventType
+from ...domain.configuration import AffectConfig
+from ...domain.events import AffectiveEvent, EventType
 
 
 def identity_variants(value: str) -> set[str]:

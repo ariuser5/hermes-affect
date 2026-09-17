@@ -10,13 +10,15 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from hermes_affect.calculations import effective_expression_drive, event_severity
-from hermes_affect.calibration import migration_proposal, preset_config, run_scenario
-from hermes_affect.config import Sensitivity, neutral_config, parse_soul_affect
-from hermes_affect.events import AffectiveEvent, EventClassifier, EventType
-from hermes_affect.models import AffectState
-from hermes_affect.runtime import AffectRuntime
-from hermes_affect.targeting import route_events
+from hermes_affect.application.classification.deterministic.classifier import EventClassifier
+from hermes_affect.application.classification.targeting import route_events
+from hermes_affect.application.session_runtime import AffectRuntime
+from hermes_affect.domain.calculations import effective_expression_drive, event_severity
+from hermes_affect.domain.configuration import Sensitivity, neutral_config
+from hermes_affect.domain.events import AffectiveEvent, EventType
+from hermes_affect.domain.state import AffectState
+from hermes_affect.infrastructure.configuration.soul_loader import parse_soul_affect
+from hermes_affect.tools.calibration import migration_proposal, preset_config, run_scenario
 from tests.fakes import FakeHermesContext, FakePluginLlm, FakeStructuredResult
 
 

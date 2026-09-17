@@ -5,18 +5,19 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from hermes_affect.events import EventClassifier, EventType
-from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, register
-from hermes_affect.semantic import (
+from hermes_affect.application.classification.deterministic.classifier import EventClassifier
+from hermes_affect.application.classification.semantic.classifier import (
     CLASSIFIER_INSTRUCTIONS,
     SemanticClassification,
-    SemanticClassifier,
     SemanticClassifierConfig,
     SemanticOutcome,
     arbitrate_classifications,
     build_classifier_input,
     validate_semantic_result,
 )
+from hermes_affect.domain.events import EventType
+from hermes_affect.infrastructure.hermes.semantic_provider import SemanticClassifier
+from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, register
 from tests.fakes import FakeHermesContext, FakePluginLlm, FakeStructuredResult
 
 
@@ -231,9 +232,7 @@ class SemanticArbitrationTests(unittest.TestCase):
         self.assertEqual(events, [])
 
     def test_high_confidence_none_overrides_keyword_match(self) -> None:
-        semantic = SemanticOutcome(
-            SemanticClassification("none", "none", None, 0.97, "mild"), "ok"
-        )
+        semantic = SemanticOutcome(SemanticClassification("none", "none", None, 0.97, "mild"), "ok")
         events = arbitrate_classifications(
             self.deterministic,
             semantic,
@@ -317,10 +316,7 @@ class SemanticPluginIntegrationTests(unittest.TestCase):
             context.emit("on_session_start", **base)
             context.emit("pre_llm_call", **base)
             path = (
-                Path(temporary)
-                / target_profile.replace(":", "_")
-                / "sessions"
-                / "session_one.json"
+                Path(temporary) / target_profile.replace(":", "_") / "sessions" / "session_one.json"
             )
             raw = path.read_text(encoding="utf-8")
             state = json.loads(raw)

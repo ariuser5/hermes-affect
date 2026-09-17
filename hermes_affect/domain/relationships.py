@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from .calculations import event_severity, temperament_drives
-from .config import AffectConfig
+from .configuration import AffectConfig
 from .events import AffectiveEvent, EventType
-from .models import SOCIAL_RECORD_LIMIT, AffectState, ParticipantRelation, clamp, utc_now
 from .parameters import HOSTILITY_STEP, POSITIVE_STEP, REPAIR_STEP, STYLE_LEARNING_RATE
+from .state import SOCIAL_RECORD_LIMIT, AffectState, ParticipantRelation, clamp, utc_now
 
 HOSTILE_EVENTS = frozenset(
     {

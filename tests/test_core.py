@@ -7,18 +7,20 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from hermes_affect.calculations import credibility, social_receptivity
-from hermes_affect.config import CORE_TRAIT_FIELDS, TUNING_FIELDS, neutral_config, parse_soul_affect
-from hermes_affect.dynamics import apply_event, decay_state
-from hermes_affect.events import AffectiveEvent, EventClassifier, EventType
-from hermes_affect.influence import observe_style
-from hermes_affect.models import AffectState, ParticipantRelation
-from hermes_affect.posture import (
-    ResponsePosture,
-    derive_posture,
+from hermes_affect.application.classification.deterministic.classifier import EventClassifier
+from hermes_affect.domain.calculations import (
+    credibility,
     effective_expression_drive,
+    social_receptivity,
 )
-from hermes_affect.storage import StateStore
+from hermes_affect.domain.configuration import CORE_TRAIT_FIELDS, TUNING_FIELDS, neutral_config
+from hermes_affect.domain.dynamics import apply_event, decay_state
+from hermes_affect.domain.events import AffectiveEvent, EventType
+from hermes_affect.domain.posture import ResponsePosture, derive_posture
+from hermes_affect.domain.relationships import observe_style
+from hermes_affect.domain.state import AffectState, ParticipantRelation
+from hermes_affect.infrastructure.configuration.soul_loader import parse_soul_affect
+from hermes_affect.infrastructure.persistence.json_store import StateStore
 
 FIXTURES = Path(__file__).parent / "fixtures" / "soul"
 
@@ -46,13 +48,15 @@ class EventClassifierTests(unittest.TestCase):
             verified_user=True,
         )
 
-        self.assertEqual([(event.event_type, event.action) for event in calm], [
-            (EventType.USER_MODERATION, "calm")
-        ])
+        self.assertEqual(
+            [(event.event_type, event.action) for event in calm],
+            [(EventType.USER_MODERATION, "calm")],
+        )
         self.assertEqual(unverified, [])
-        self.assertEqual([(event.event_type, event.action) for event in heat], [
-            (EventType.USER_MODERATION, "heat")
-        ])
+        self.assertEqual(
+            [(event.event_type, event.action) for event in heat],
+            [(EventType.USER_MODERATION, "heat")],
+        )
 
     def test_bot_mediation_and_provocation_are_distinct_events(self) -> None:
         classifier = EventClassifier()
@@ -65,9 +69,7 @@ class EventClassifierTests(unittest.TestCase):
         )
 
         self.assertEqual([event.event_type for event in mediation], [EventType.BOT_MEDIATION])
-        self.assertEqual(
-            [event.event_type for event in provocation], [EventType.BOT_PROVOCATION]
-        )
+        self.assertEqual([event.event_type for event in provocation], [EventType.BOT_PROVOCATION])
         self.assertEqual(user_mediation, [])
 
 
@@ -145,9 +147,7 @@ class SoulConfigTests(unittest.TestCase):
         config, _ = parse_soul_affect(fixture("valid.md"))
         serialized = config.to_dict()
         self.assertEqual(set(serialized["tuning"]), set(TUNING_FIELDS))
-        self.assertEqual(
-            set(serialized), {"schema_version", "traits", "tuning", "sensitivities"}
-        )
+        self.assertEqual(set(serialized), {"schema_version", "traits", "tuning", "sensitivities"})
 
     def test_schema_contains_only_the_compact_core_model(self) -> None:
         schema = json.loads(
@@ -157,9 +157,7 @@ class SoulConfigTests(unittest.TestCase):
         )
         traits = schema["properties"]["traits"]["properties"]
         self.assertEqual(set(traits), set(CORE_TRAIT_FIELDS))
-        self.assertEqual(
-            set(schema["properties"]["tuning"]["properties"]), set(TUNING_FIELDS)
-        )
+        self.assertEqual(set(schema["properties"]["tuning"]["properties"]), set(TUNING_FIELDS))
 
 
 class DynamicsTests(unittest.TestCase):
@@ -303,17 +301,13 @@ class DynamicsTests(unittest.TestCase):
         evasive_state = AffectState.initial("bot-a", "evasive")
         evasive_state.open_conflicts["user:1"] = {"status": "open"}
         evasive_state.frustration = 0.4
-        self.assertEqual(
-            derive_posture(evasive_state, evasive_config), ResponsePosture.EVASIVE
-        )
+        self.assertEqual(derive_posture(evasive_state, evasive_config), ResponsePosture.EVASIVE)
 
         refusal_state = AffectState.initial("bot-a", "refusal")
         refusal_state.open_conflicts["user:1"] = {"status": "open"}
         refusal_state.frustration = 0.8
         refusal_state.offended = 0.8
-        self.assertEqual(
-            derive_posture(refusal_state, evasive_config), ResponsePosture.REFUSAL
-        )
+        self.assertEqual(derive_posture(refusal_state, evasive_config), ResponsePosture.REFUSAL)
 
         avoidance_state = AffectState.initial("bot-a", "avoidance")
         avoidance_state.active_sensitivities.append("competence")
@@ -342,9 +336,7 @@ class DynamicsTests(unittest.TestCase):
         serious_state = AffectState.initial("bot-a", "serious")
         joke = AffectiveEvent(EventType.JOKE, "user:1")
         self.assertEqual(apply_event(playful_state, joke, playful), "playful_signal")
-        self.assertEqual(
-            apply_event(serious_state, joke, serious), "serious_joke_interpretation"
-        )
+        self.assertEqual(apply_event(serious_state, joke, serious), "serious_joke_interpretation")
         self.assertGreater(serious_state.frustration, playful_state.frustration)
 
     def test_persistence_controls_decay_rate(self) -> None:
@@ -373,9 +365,13 @@ class InfluenceTests(unittest.TestCase):
     def test_receptiveness_changes_actual_mediation(self) -> None:
         states = []
         for value in (0.0, 1.0):
-            config = replace(neutral_config(), traits={
-                **neutral_config().traits, "receptiveness": value,
-            })
+            config = replace(
+                neutral_config(),
+                traits={
+                    **neutral_config().traits,
+                    "receptiveness": value,
+                },
+            )
             state = AffectState("a", "s", frustration=0.8, offended=0.8)
             state.relationships["b"] = ParticipantRelation(trust=0.9, respect=0.9)
             apply_event(state, AffectiveEvent(EventType.BOT_MEDIATION, "b"), config)

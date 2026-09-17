@@ -5,10 +5,10 @@ from __future__ import annotations
 from enum import Enum
 
 from .calculations import affect_intensity, effective_expression_drive, temperament_drives
-from .config import AffectConfig
+from .configuration import AffectConfig
 from .events import AffectiveEvent, EventType
-from .models import AffectState
 from .parameters import ACTIVE_THRESHOLD, SECONDARY_SHARE, STRATEGY_THRESHOLD, STRONG_THRESHOLD
+from .state import AffectState
 
 __all__ = ["ResponsePosture", "affect_intensity", "effective_expression_drive", "derive_posture"]
 

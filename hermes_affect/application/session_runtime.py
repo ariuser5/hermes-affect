@@ -12,21 +12,23 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .commands import AffectCommandHandler
-from .config import TUNING_FIELDS, AffectConfig, neutral_config, parse_soul_affect, validate_config
-from .dynamics import apply_event, decay_state
-from .events import EventClassifier, EventType
-from .influence import observe_exchange
-from .models import AffectState, utc_now
-from .posture import derive_posture
-from .rendering import derive_mood, render_context
-from .semantic import (
-    SemanticClassifier,
+from ..domain.configuration import TUNING_FIELDS, AffectConfig, neutral_config, validate_config
+from ..domain.dynamics import apply_event, decay_state
+from ..domain.events import EventType
+from ..domain.posture import derive_posture
+from ..domain.relationships import observe_exchange
+from ..domain.state import AffectState, utc_now
+from ..infrastructure.configuration.soul_loader import parse_soul_affect
+from ..infrastructure.hermes.semantic_provider import SemanticClassifier
+from ..infrastructure.persistence.json_store import DEFAULT_ABANDONED_STATE_DAYS, StateStore
+from .classification.deterministic.classifier import EventClassifier
+from .classification.semantic.classifier import (
     SemanticClassifierConfig,
     arbitrate_classifications,
 )
-from .storage import DEFAULT_ABANDONED_STATE_DAYS, StateStore
-from .targeting import route_events
+from .classification.targeting import route_events
+from .commands import AffectCommandHandler
+from .response.rendering import derive_mood, render_context
 
 logger = logging.getLogger("hermes-affect")
 SEMANTIC_CLASSIFIER_TASK = "hermes_affect_classifier"

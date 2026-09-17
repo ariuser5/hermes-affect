@@ -26,21 +26,24 @@ presets, formula responsibilities and migration, see [calibration.md](calibratio
 ## Code layout
 
 - plugin.py preserves the public hermes_affect.plugin:register entry point.
-- integration/adapter.py registers the documented Hermes callbacks and command.
-- runtime.py orchestrates session loading, classification, observation, state
-  transitions, auditing and persistence.
-- config.py validates SOUL configuration and recognizes legacy versions.
-- targeting.py resolves delivered identities and directs personal versus
-  third-party events.
-- parameters.py holds shared calibration values.
-- calculations.py contains pure derived quantities.
-- dynamics.py applies event families and passive decay.
-- influence.py maintains local observed style, directed exchanges and atmosphere.
-- posture.py selects response strategy.
-- rendering.py creates qualitative guidance and emotional wording.
-- commands.py handles inspection, explanation and administrative interventions.
-- calibration.py replays synthetic scenarios through the same runtime, using
-  temporary storage and a fixed clock, and proposes read-only v1 migration.
+- domain/ contains affect state, event values, configuration values, dynamics,
+  relationships, calculations and response-posture policy without Hermes or
+  filesystem dependencies.
+- application/session_runtime.py orchestrates session loading, classification,
+  observation, state transitions, auditing and persistence.
+- application/classification/deterministic/ contains rule-based event
+  classification; application/classification/semantic/ contains semantic
+  result validation and deterministic/semantic arbitration.
+- application/commands.py and application/response/ handle commands and
+  qualitative guidance rendered for the LLM.
+- infrastructure/hermes/ registers Hermes callbacks and owns the auxiliary LLM
+  provider call; infrastructure/persistence/ owns JSON state files, locking,
+  atomic writes and garbage collection.
+- infrastructure/configuration/ loads the structured session_affect section
+  from SOUL.md.
+- tools/calibration.py replays synthetic scenarios through the same runtime,
+  using temporary storage and a fixed clock, and proposes read-only v1
+  migration.
 
 No private Hermes imports, live peer-state reads, mutable shared room files or
 automatic LLM configuration extraction are required.

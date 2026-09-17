@@ -1,7 +1,7 @@
 """Hermes registration and hook wiring.
 
 Keep this module deliberately small.  It translates the public Hermes plugin
-contract into callbacks on :class:`hermes_affect.runtime.AffectRuntime`; the
+contract into callbacks on :class:`hermes_affect.application.session_runtime.AffectRuntime`; the
 affect behavior itself belongs in the runtime and domain modules.
 """
 
@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from ..runtime import SEMANTIC_CLASSIFIER_TASK, AffectRuntime
+from ...application.session_runtime import SEMANTIC_CLASSIFIER_TASK, AffectRuntime
 
 logger = logging.getLogger("hermes-affect")
 
@@ -19,8 +19,7 @@ def _register_semantic_classifier_task(ctx: Any) -> bool:
     register_task = getattr(ctx, "register_auxiliary_task", None)
     if not callable(register_task):
         logger.warning(
-            "semantic_classification status=unavailable "
-            "reason=auxiliary_task_registration_missing"
+            "semantic_classification status=unavailable reason=auxiliary_task_registration_missing"
         )
         return False
     register_task(
@@ -36,9 +35,7 @@ def register(ctx: Any) -> None:
 
     runtime = AffectRuntime(ctx)
     runtime.semantic_classifier.task_registration_available = (
-        _register_semantic_classifier_task(ctx)
-        if runtime.semantic_config.enabled
-        else True
+        _register_semantic_classifier_task(ctx) if runtime.semantic_config.enabled else True
     )
     ctx.register_hook("on_session_start", runtime.on_session_start)
     ctx.register_hook("pre_llm_call", runtime.pre_llm_call)

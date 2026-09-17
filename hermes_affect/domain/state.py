@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from .config import LEGACY_TUNING_FIELDS, neutral_config
+from .configuration import LEGACY_TUNING_FIELDS, neutral_config
 
 STATE_SCHEMA_VERSION = 2
 AUDIT_RECORD_LIMIT = 64

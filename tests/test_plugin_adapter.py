@@ -8,10 +8,10 @@ from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
-from hermes_affect.config import neutral_config
-from hermes_affect.models import AffectState
+from hermes_affect.domain.configuration import neutral_config
+from hermes_affect.domain.posture import ResponsePosture
+from hermes_affect.domain.state import AffectState
 from hermes_affect.plugin import SEMANTIC_CLASSIFIER_TASK, AffectRuntime, register
-from hermes_affect.posture import ResponsePosture
 from tests.fakes import FakeHermesContext
 
 
@@ -175,9 +175,7 @@ class PluginAdapterTests(unittest.TestCase):
             base = {"profile_id": "bot:one", "session_id": "session:one"}
             first_context.emit("on_session_start", **base)
             state_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
-            first_state = AffectState.from_dict(
-                json.loads(state_path.read_text(encoding="utf-8"))
-            )
+            first_state = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
 
             soul_path.write_text(
                 """session_affect:
@@ -318,9 +316,7 @@ class PluginAdapterTests(unittest.TestCase):
                 "parent_session_id": "session:parent",
             }
             context.emit("on_session_start", **compressed_kwargs)
-            compressed_path = (
-                Path(temporary) / "bot_one" / "sessions" / "session_compressed.json"
-            )
+            compressed_path = Path(temporary) / "bot_one" / "sessions" / "session_compressed.json"
             continued = AffectState.from_dict(
                 json.loads(compressed_path.read_text(encoding="utf-8"))
             )
@@ -548,9 +544,7 @@ class PluginAdapterTests(unittest.TestCase):
                 turn_id="turn:insult",
             )
             state_path = Path(temporary) / "bot_test" / "sessions" / "session_normal.json"
-            before_calm = AffectState.from_dict(
-                json.loads(state_path.read_text(encoding="utf-8"))
-            )
+            before_calm = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
             context.emit(
                 "pre_llm_call",
                 **base,
@@ -558,9 +552,7 @@ class PluginAdapterTests(unittest.TestCase):
                 verified_user=True,
                 turn_id="turn:calm",
             )
-            after_calm = AffectState.from_dict(
-                json.loads(state_path.read_text(encoding="utf-8"))
-            )
+            after_calm = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
 
             self.assertIsNotNone(injected)
             self.assertIn("Internal affective guidance", injected["context"])
@@ -806,9 +798,7 @@ class PluginAdapterTests(unittest.TestCase):
                 verified_user=False,
                 **kwargs,
             )
-            self.assertEqual(
-                raw_only, "Affect administration requires a verified user identity."
-            )
+            self.assertEqual(raw_only, "Affect administration requires a verified user identity.")
             self.assertEqual(denied, "Affect administration requires a verified user identity.")
             self.assertEqual(bot_denied, "Affect administration requires a verified user identity.")
             self.assertEqual(
@@ -877,9 +867,7 @@ class PluginAdapterTests(unittest.TestCase):
                 verified_user=False,
                 turn_id="turn:two",
             )
-            unverified = AffectState.from_dict(
-                json.loads(store_path.read_text(encoding="utf-8"))
-            )
+            unverified = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
             context.emit(
                 "pre_llm_call",
                 **base,
@@ -1003,8 +991,9 @@ class PluginAdapterTests(unittest.TestCase):
 
             reset_state = AffectState.from_dict(
                 json.loads(
-                    (Path(temporary) / "bot_one" / "sessions" / "session_one.json")
-                    .read_text(encoding="utf-8")
+                    (Path(temporary) / "bot_one" / "sessions" / "session_one.json").read_text(
+                        encoding="utf-8"
+                    )
                 )
             )
             self.assertEqual(reset_state.session_id, "session:one")
@@ -1027,9 +1016,7 @@ class PluginAdapterTests(unittest.TestCase):
                 turn_id="turn:old",
             )
             old_path = Path(temporary) / "bot_one" / "sessions" / "session_old.json"
-            old_before = AffectState.from_dict(
-                json.loads(old_path.read_text(encoding="utf-8"))
-            )
+            old_before = AffectState.from_dict(json.loads(old_path.read_text(encoding="utf-8")))
 
             context.emit(
                 "on_session_reset",
@@ -1038,12 +1025,8 @@ class PluginAdapterTests(unittest.TestCase):
                 new_session_id="session:new",
             )
             new_path = Path(temporary) / "bot_one" / "sessions" / "session_new.json"
-            new_state = AffectState.from_dict(
-                json.loads(new_path.read_text(encoding="utf-8"))
-            )
-            old_after = AffectState.from_dict(
-                json.loads(old_path.read_text(encoding="utf-8"))
-            )
+            new_state = AffectState.from_dict(json.loads(new_path.read_text(encoding="utf-8")))
+            old_after = AffectState.from_dict(json.loads(old_path.read_text(encoding="utf-8")))
 
             self.assertEqual(new_state.session_id, "session:new")
             self.assertEqual(new_state.frustration, 0.0)
@@ -1070,18 +1053,10 @@ class PluginAdapterTests(unittest.TestCase):
             before = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
             admin_base = {**base, "sender_id": "user:admin"}
 
-            calm = context.invoke_command(
-                "affect", args_raw="calm", **admin_base
-            )
-            after_calm = AffectState.from_dict(
-                json.loads(store_path.read_text(encoding="utf-8"))
-            )
-            heat = context.invoke_command(
-                "affect", args_raw="heat", **admin_base
-            )
-            after_heat = AffectState.from_dict(
-                json.loads(store_path.read_text(encoding="utf-8"))
-            )
+            calm = context.invoke_command("affect", args_raw="calm", **admin_base)
+            after_calm = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
+            heat = context.invoke_command("affect", args_raw="heat", **admin_base)
+            after_heat = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
 
             self.assertEqual(calm, "Affective state instructed to calm.")
             self.assertEqual(heat, "Affective state instructed to heat.")
@@ -1100,12 +1075,8 @@ class PluginAdapterTests(unittest.TestCase):
             }
             context.emit("on_session_start", **kwargs)
 
-            invalid = context.invoke_command(
-                "affect", args_raw="tune pride 2", **kwargs
-            )
-            tuned = context.invoke_command(
-                "affect", args_raw="tune expression_gain 0", **kwargs
-            )
+            invalid = context.invoke_command("affect", args_raw="tune pride 2", **kwargs)
+            tuned = context.invoke_command("affect", args_raw="tune expression_gain 0", **kwargs)
             store_path = Path(temporary) / "bot_one" / "sessions" / "session_one.json"
             state = AffectState.from_dict(json.loads(store_path.read_text(encoding="utf-8")))
 

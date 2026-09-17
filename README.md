@@ -45,9 +45,9 @@ Awareness is limited to messages actually delivered to the bot.
 Compare temperaments without touching a running bot:
 
 ```bash
-python -m hermes_affect.calibration --scenario banter --compare
-python -m hermes_affect.calibration --scenario group --compare
-python -m hermes_affect.calibration --scenario repair --sweep receptiveness --json
+python -m hermes_affect.tools.calibration --scenario banter --compare
+python -m hermes_affect.tools.calibration --scenario group --compare
+python -m hermes_affect.tools.calibration --scenario repair --sweep receptiveness --json
 ```
 
 See [the calibration guide](docs/calibration.md) for examples, derived controls,

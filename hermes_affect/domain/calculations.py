@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import math
 
-from .config import AffectConfig
+from .configuration import AffectConfig
 from .events import AffectiveEvent
-from .models import AffectState, ParticipantRelation, clamp
 from .parameters import (
     EXPRESSION_CURVATURE,
     MIN_DECAY_RATE,
@@ -14,6 +13,7 @@ from .parameters import (
     SECONDARY_SHARE,
     TRAIT_FLOOR,
 )
+from .state import AffectState, ParticipantRelation, clamp
 
 
 def trait_factor(value: float) -> float:

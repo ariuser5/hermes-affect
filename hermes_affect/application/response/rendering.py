@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 
-from .calculations import effective_expression_drive
-from .config import AffectConfig
-from .models import AffectState
-from .parameters import ACTIVE_THRESHOLD, EXPRESSION_TIERS, SECONDARY_SHARE
-from .posture import ResponsePosture
+from ...domain.calculations import effective_expression_drive
+from ...domain.configuration import AffectConfig
+from ...domain.parameters import ACTIVE_THRESHOLD, EXPRESSION_TIERS, SECONDARY_SHARE
+from ...domain.posture import ResponsePosture
+from ...domain.state import AffectState
 
 
 def derive_mood(state: AffectState) -> str:

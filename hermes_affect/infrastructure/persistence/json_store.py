@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from .models import AffectState
+from ...domain.state import AffectState
 
 DEFAULT_ABANDONED_STATE_DAYS = 90
 

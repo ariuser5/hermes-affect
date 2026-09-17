@@ -1,0 +1,1 @@
+"""External configuration loading adapters."""

@@ -6,10 +6,14 @@ import json
 import math
 from typing import Any
 
-from .calculations import credibility, social_receptivity, temperament_drives
-from .config import TUNING_FIELDS
-from .models import AffectState, utc_now
-from .posture import effective_expression_drive
+from ..domain.calculations import (
+    credibility,
+    effective_expression_drive,
+    social_receptivity,
+    temperament_drives,
+)
+from ..domain.configuration import TUNING_FIELDS
+from ..domain.state import AffectState, utc_now
 
 
 class AffectCommandHandler:

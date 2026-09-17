@@ -11,12 +11,12 @@ whether it confronts, withdraws, teases or mediates.
 From the repository, with the development Python environment:
 
 ```bash
-python -m hermes_affect.calibration --scenario banter --compare
-python -m hermes_affect.calibration --scenario group --compare
-python -m hermes_affect.calibration --scenario repair --sweep receptiveness
-python -m hermes_affect.calibration --scenario praise --expression 2
-python -m hermes_affect.calibration --preset sensitive --trait assertiveness=0.9 --json
-python -m hermes_affect.calibration --soul examples/soul/basic.md --scenario cooling --json
+python -m hermes_affect.tools.calibration --scenario banter --compare
+python -m hermes_affect.tools.calibration --scenario group --compare
+python -m hermes_affect.tools.calibration --scenario repair --sweep receptiveness
+python -m hermes_affect.tools.calibration --scenario praise --expression 2
+python -m hermes_affect.tools.calibration --preset sensitive --trait assertiveness=0.9 --json
+python -m hermes_affect.tools.calibration --soul examples/soul/basic.md --scenario cooling --json
 ```
 
 The table shows posture, expression tier, frustration, offense and perceived
@@ -126,7 +126,7 @@ existing v2 session; it is not a SOUL reload command.
 ## Migrating v1
 
 ```bash
-python -m hermes_affect.calibration --migrate-soul path/to/SOUL.md
+python -m hermes_affect.tools.calibration --migrate-soul path/to/SOUL.md
 ```
 
 This prints a proposed v2 configuration and explicitly reports removed

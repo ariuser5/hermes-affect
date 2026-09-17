@@ -1,6 +1,6 @@
 """Offline runtime scenarios and read-only v1 migration proposals.
 
-Run python -m hermes_affect.calibration --help. No Hermes/provider calls are made.
+Run python -m hermes_affect.tools.calibration --help. No Hermes/provider calls are made.
 Each run uses isolated temporary storage and the same pipeline as the plugin.
 """
 
@@ -14,17 +14,17 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .calculations import effective_expression_drive, temperament_drives
-from .config import (
+from ..application.response.rendering import expression_tier
+from ..application.session_runtime import AffectRuntime
+from ..domain.calculations import effective_expression_drive, temperament_drives
+from ..domain.configuration import (
     CORE_TRAIT_FIELDS,
     AffectConfig,
     neutral_config,
-    parse_soul_affect,
     validate_config,
 )
-from .models import AffectState
-from .rendering import expression_tier
-from .runtime import AffectRuntime
+from ..domain.state import AffectState
+from ..infrastructure.configuration.soul_loader import parse_soul_affect
 
 PRESETS = {
     "neutral": {},

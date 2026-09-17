@@ -14,10 +14,8 @@ from .calculations import (
     social_receptivity,
     teasing_misunderstanding,
 )
-from .config import AffectConfig
+from .configuration import AffectConfig
 from .events import AffectiveEvent, EventType
-from .influence import HOSTILE_EVENTS, REPAIR_EVENTS
-from .models import AffectState, ParticipantRelation, clamp
 from .parameters import (
     FRICTION_STEP,
     HOSTILITY_STEP,
@@ -27,6 +25,8 @@ from .parameters import (
     REPAIR_STEP,
     SECONDARY_SHARE,
 )
+from .relationships import HOSTILE_EVENTS, REPAIR_EVENTS
+from .state import AffectState, ParticipantRelation, clamp
 
 
 def _change(state: AffectState, *, valence=0.0, arousal=0.0, frustration=0.0, offended=0.0) -> None:
