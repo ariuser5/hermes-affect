@@ -19,6 +19,10 @@ python -m hermes_affect.tools.calibration --preset sensitive --trait assertivene
 python -m hermes_affect.tools.calibration --soul examples/soul/basic.md --scenario cooling --json
 ```
 
+`hermes_affect.tools.calibration` is the canonical module path. The older
+`python -m hermes_affect.calibration` path remains supported as a compatibility
+alias for existing callers.
+
 The table shows posture, expression tier, frustration, offense and perceived
 atmosphere after every turn. JSON additionally shows effective configuration,
 derived drives and the exact guidance the plugin would inject.
