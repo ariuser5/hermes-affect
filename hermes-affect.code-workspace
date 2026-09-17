@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/__init__.py": true,
+      "**/__pycache__": true
+    },
+    "search.exclude": {
+      "**/__init__.py": true,
+      "**/__pycache__": true
+    }
+  }
+}
