@@ -4,6 +4,43 @@ This is the execution checklist for the `hermes-affect` Hermes Agent plugin.
 Detailed design belongs in `docs/architecture.md`; deployment-specific
 instructions belong in the infrastructure repository that runs Hermes.
 
+## Current model revision — six traits, calibration and local social perception
+
+The completed v1 milestones below are historical records. This section and
+the current architecture supersede the seven-trait, three-gain and disconnected
+influence designs; old checkmarks do not assert those old interfaces remain.
+
+- [x] Introduce v2 with six traits and one expression gain.
+- [x] Derive escalation, repair, mischief, conflict avoidance and mediation.
+- [x] Connect relationship trust/respect, observed style and receptiveness to events.
+- [x] Separate positive expression from conflict wording; remove duplicate temperament weighting.
+- [x] Resolve effective configuration from the persisted session snapshot.
+- [x] Normalize dominant event intent and verified moderation precedence.
+- [x] Connect literal topic sensitivity matching and refresh active topics.
+- [x] Derive conflict records from current tension and scope retaliation to the speaker.
+- [x] Add per-bot perceived atmosphere and bounded directed third-party observations.
+- [x] Distinguish observed teasing from evidence of expressed participant frustration.
+- [x] Generate teasing, withdrawal, confrontation and mediation guidance from temperament.
+- [x] Add an offline runtime scenario runner, preset comparison and single-trait sweeps.
+- [x] Add authenticated explanation diagnostics and explicit read-only migration proposals.
+- [ ] Validate actual generated replies and group message delivery in a real Hermes profile.
+- [ ] Evaluate more communication patterns with scenario evidence before adding model dimensions.
+
+## Future interests and conversational effort — requested 2026-09-17
+
+- [ ] Model per-bot topic preferences: interested, neutral, disliked and strongly avoided.
+- [ ] Let discussion of liked topics improve perceived atmosphere and relationships.
+- [ ] Let unwanted-topic requests increase frustration, with reactions moderated by temperament.
+- [ ] Track repeated clarification and perceived conversational effort without raw transcripts.
+- [ ] Distinguish terse repeated prompts such as “why?” from clarification that demonstrates
+      understanding and identifies a specific missing point.
+- [ ] Treat brevity or confusion as ambiguous evidence, not proof of hostility or stubbornness.
+- [ ] Model escalation, avoidance, patient explanation and repair according to temperament
+      and context; ensure ordinary questions do not automatically become personal insults.
+- [ ] Design optional topic representations, privacy bounds and calibration scenarios before
+      implementing this feature. No topic-interest or clarification-frustration behavior is
+      implemented by the current refactor.
+
 ## Phase 0 — repository and CI baseline
 
 - [x] Create the standalone plugin scaffold.
@@ -285,9 +322,9 @@ Deployment gate:
   adapter while preserving `hermes_affect.plugin:register` as the entry point.
 - [ ] Extract session lifecycle and state-loading orchestration from the Hermes
   adapter.
-- [ ] Extract callback identity resolution and participant targeting helpers.
+- [x] Extract participant targeting helpers; broader callback identity cleanup remains future work.
 - [ ] Extract affect observation/audit bookkeeping from the runtime pipeline.
-- [ ] Extract injected-context rendering from state transition orchestration.
+- [x] Extract injected-context rendering from state transition orchestration.
 
 ## Explicit MVP non-goals
 
@@ -305,7 +342,7 @@ Deployment gate:
 ## Future roadmap
 
 When the MVP is stable, evaluate SQLite or another transactional/event-based
-store, safe state-schema evolution, limited public temperament signatures, group
-atmosphere with clear ownership, coordinated room resets, distributed groups,
+store, safe state-schema evolution, limited public temperament signatures,
+better local social perception, coordinated room resets, distributed groups,
 cheaper auxiliary-task routing, richer semantic target resolution, and tools
 for visualizing relationship and influence changes over time.

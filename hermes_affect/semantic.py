@@ -6,10 +6,11 @@ import json
 import logging
 import math
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from .events import AffectiveEvent, EventType
+from .targeting import canonical_target
 
 logger = logging.getLogger("hermes-affect")
 
@@ -23,6 +24,11 @@ SEMANTIC_EVENT_VALUES = frozenset(
         EventType.DISAGREEMENT.value,
         EventType.APOLOGY.value,
         EventType.RECONCILIATION.value,
+        EventType.BOT_MEDIATION.value,
+        EventType.BOT_PROVOCATION.value,
+        EventType.TOPIC_STEERING.value,
+        EventType.LEADERSHIP_CHALLENGE.value,
+        EventType.FRUSTRATION.value,
         "none",
     }
 )
@@ -57,6 +63,10 @@ Distinguish direct speech from quotations or discussion about insults. Distingui
 jokes, teasing, sarcasm, and hostility. Return event=none for ordinary
 statements or when the affective meaning is not reliable. Set target_id to the
 matching identifier for bot or participant targets, and null otherwise.
+Use expressed_frustration for a speaker explicitly expressing their own distress;
+do not infer it solely because somebody else teased them. Teasing can be playful
+or intended to get a reaction; use bot_provocation for deliberate hostile baiting.
+Use bot_mediation for social attempts to calm others, never administrative authority.
 """
 
 
@@ -472,6 +482,7 @@ def arbitrate_classifications(
     bot_identities: Sequence[str],
     min_confidence: float,
     fallback: str,
+    known_participants: Sequence[str] = (),
 ) -> list[AffectiveEvent]:
     """Apply the conservative deterministic/semantic arbitration policy."""
 
@@ -493,6 +504,13 @@ def arbitrate_classifications(
         return authoritative
     if classification.event == "none":
         return authoritative
+    if classification.event == EventType.FRUSTRATION.value and classification.target == "none":
+        return [classification.to_event(speaker_id=speaker_id)]
+    if classification.target == "participant" and classification.target_id:
+        target = canonical_target(classification.target_id, list(known_participants))
+        if target is not None:
+            return [replace(classification.to_event(speaker_id=speaker_id), target_id=target)]
+        return []
     if classification.target != "bot" or not classification.target_id:
         return authoritative
     if classification.target_id.casefold() not in _identity_variants(bot_identities):

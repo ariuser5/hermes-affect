@@ -14,14 +14,17 @@ CORE_TRAIT_FIELDS = (
     "pride",
     "playfulness",
     "assertiveness",
-    "social_influence",
     "receptiveness",
 )
-TUNING_FIELDS = ("expression_gain", "escalation_gain", "repair_gain")
+TUNING_FIELDS = ("expression_gain",)
+LEGACY_TRAIT_FIELDS = (*CORE_TRAIT_FIELDS, "social_influence")
+LEGACY_TUNING_FIELDS = (*TUNING_FIELDS, "escalation_gain", "repair_gain")
+CONFIG_SCHEMA_VERSION = 2
 
 _TOP_LEVEL_FIELDS = {"schema_version", "traits", "tuning", "sensitivities"}
 _SECTION_RE = re.compile(
-    r"(?ms)^\s*session_affect:\s*\n(?P<body>(?:^[ \t]+.*(?:\n|$))*)"
+    r"(?m)^[ \t]*session_affect:[ \t]*\r?\n"
+    r"(?P<body>(?:^[ \t]+[^\r\n]*(?:\r?\n|$)|^[ \t]*\r?\n)*)"
 )
 
 
@@ -33,7 +36,7 @@ class Sensitivity:
 
 @dataclass(frozen=True)
 class AffectConfig:
-    schema_version: int = 1
+    schema_version: int = CONFIG_SCHEMA_VERSION
     traits: Mapping[str, float] = field(default_factory=dict)
     tuning: Mapping[str, float] = field(default_factory=dict)
     sensitivities: tuple[Sensitivity, ...] = ()
@@ -98,9 +101,11 @@ def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
             allowed=_TOP_LEVEL_FIELDS,
             warnings=warnings,
         )
-        schema_version = raw.get("schema_version", 1)
-        if isinstance(schema_version, bool) or schema_version != 1:
+        schema_version = raw.get("schema_version", CONFIG_SCHEMA_VERSION)
+        if isinstance(schema_version, bool) or schema_version not in (1, 2):
             raise ValueError("unsupported schema_version")
+        trait_fields = LEGACY_TRAIT_FIELDS if schema_version == 1 else CORE_TRAIT_FIELDS
+        tuning_fields = LEGACY_TUNING_FIELDS if schema_version == 1 else TUNING_FIELDS
 
         traits_raw = raw.get("traits", {})
         tuning_raw = raw.get("tuning", {})
@@ -110,25 +115,25 @@ def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
         _warn_unknown_fields(
             traits_raw,
             location="session_affect.traits",
-            allowed=set(CORE_TRAIT_FIELDS),
+            allowed=set(trait_fields),
             warnings=warnings,
         )
         _warn_unknown_fields(
             tuning_raw,
             location="session_affect.tuning",
-            allowed=set(TUNING_FIELDS),
+            allowed=set(tuning_fields),
             warnings=warnings,
         )
 
-        traits = dict(defaults.traits)
-        for name in CORE_TRAIT_FIELDS:
+        traits = {name: 0.5 for name in trait_fields}
+        for name in trait_fields:
             if name in traits_raw:
                 traits[name] = _number(
                     traits_raw[name], field_name=f"traits.{name}", minimum=0.0, maximum=1.0
                 )
 
-        tuning = dict(defaults.tuning)
-        for name in TUNING_FIELDS:
+        tuning = {name: 1.0 for name in tuning_fields}
+        for name in tuning_fields:
             if name in tuning_raw:
                 tuning[name] = _number(
                     tuning_raw[name], field_name=f"tuning.{name}", minimum=0.0, maximum=10.0
@@ -161,7 +166,9 @@ def validate_config(raw: Any) -> tuple[AffectConfig, list[str]]:
                     ),
                 )
             )
-        return AffectConfig(1, traits, tuning, tuple(sensitivities)), warnings
+        if schema_version == 1:
+            warnings.append("Legacy session_affect model: migration to schema_version 2 required.")
+        return AffectConfig(schema_version, traits, tuning, tuple(sensitivities)), warnings
     except (TypeError, ValueError) as exc:
         warnings.append(f"Invalid session_affect configuration: {exc}; using neutral defaults")
         return defaults, warnings

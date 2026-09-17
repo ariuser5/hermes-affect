@@ -7,14 +7,11 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from hermes_affect.calculations import credibility, social_receptivity
 from hermes_affect.config import CORE_TRAIT_FIELDS, TUNING_FIELDS, neutral_config, parse_soul_affect
 from hermes_affect.dynamics import apply_event, decay_state
 from hermes_affect.events import AffectiveEvent, EventClassifier, EventType
-from hermes_affect.influence import (
-    LayeredTraitResolver,
-    ParticipantTraits,
-    evaluate_influence,
-)
+from hermes_affect.influence import observe_style
 from hermes_affect.models import AffectState, ParticipantRelation
 from hermes_affect.posture import (
     ResponsePosture,
@@ -91,7 +88,7 @@ class SoulConfigTests(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertEqual(config.to_dict(), neutral_config().to_dict())
 
-    def test_valid_section_preserves_seven_traits_and_sensitivities(self) -> None:
+    def test_valid_section_preserves_six_traits_and_sensitivities(self) -> None:
         config, warnings = parse_soul_affect(fixture("valid.md"))
         self.assertEqual(warnings, [])
         self.assertEqual(set(config.traits), set(CORE_TRAIT_FIELDS))
@@ -104,20 +101,18 @@ class SoulConfigTests(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertEqual(config.traits["pride"], 0.8)
         self.assertEqual(config.traits["reactivity"], 0.5)
-        self.assertEqual(config.tuning["repair_gain"], 1.5)
-        self.assertEqual(config.tuning["expression_gain"], 1.0)
+        self.assertEqual(config.tuning["expression_gain"], 1.5)
 
     def test_trait_boundaries_are_inclusive(self) -> None:
         config, warnings = parse_soul_affect(
             """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     reactivity: 0
     persistence: 1
     pride: 0
     playfulness: 1
     assertiveness: 0
-    social_influence: 1
     receptiveness: 0
 """
         )
@@ -134,7 +129,7 @@ class SoulConfigTests(unittest.TestCase):
     def test_unknown_fields_warn_and_are_not_reinterpreted(self) -> None:
         config, warnings = parse_soul_affect(
             """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     reactivity: 0.8
     unknown_trait: 0.95
@@ -196,7 +191,7 @@ class DynamicsTests(unittest.TestCase):
                 "reactivity": 1.0,
                 "assertiveness": 0.8,
             },
-            tuning={**neutral_config().tuning, "escalation_gain": 2.0, "expression_gain": 2.0},
+            tuning={**neutral_config().tuning, "expression_gain": 2.0},
         )
         state = AffectState.initial("bot-a", "session-1")
         rule = apply_event(
@@ -258,7 +253,7 @@ class DynamicsTests(unittest.TestCase):
         suppressed = replace(
             base,
             traits={**base.traits, "assertiveness": 0.9},
-            tuning={**base.tuning, "escalation_gain": 2.0, "expression_gain": 0.5},
+            tuning={**base.tuning, "expression_gain": 0.5},
         )
         expressive = replace(
             suppressed,
@@ -370,79 +365,45 @@ class DynamicsTests(unittest.TestCase):
 
 
 class InfluenceTests(unittest.TestCase):
-    def test_trait_resolution_prefers_public_then_observed_then_neutral(self) -> None:
-        public = ParticipantTraits(playfulness=0.9)
-        observed = ParticipantTraits(playfulness=0.2)
-        resolver = LayeredTraitResolver(
-            public_signatures={"bot:public": public},
-            observed_traits={"bot:public": observed, "bot:observed": observed},
-        )
-        self.assertEqual(resolver.resolve("bot:public"), public)
-        self.assertEqual(resolver.resolve("bot:observed"), observed)
-        self.assertEqual(resolver.resolve("bot:unknown"), ParticipantTraits())
+    def test_unknown_participant_has_nonzero_neutral_credibility(self) -> None:
+        relation = ParticipantRelation()
+        self.assertEqual(credibility(relation), 0.5)
+        self.assertGreater(social_receptivity(neutral_config(), relation), 0.0)
 
-    def test_leadership_tendency_increases_with_assertiveness_and_influence(self) -> None:
-        relation = ParticipantRelation(trust=0.7, respect=0.9)
-        listener = ParticipantTraits(receptiveness=0.8, persistence=0.8)
-        quiet = evaluate_influence(
-            ParticipantTraits(assertiveness=0.2, social_influence=0.9), listener, relation
-        )
-        leader = evaluate_influence(
-            ParticipantTraits(assertiveness=0.9, social_influence=0.9), listener, relation
-        )
-        self.assertGreater(
-            leader.factors["leadership_tendency"], quiet.factors["leadership_tendency"]
-        )
-        self.assertGreater(leader.persuasion, quiet.persuasion)
+    def test_receptiveness_changes_actual_mediation(self) -> None:
+        states = []
+        for value in (0.0, 1.0):
+            config = replace(neutral_config(), traits={
+                **neutral_config().traits, "receptiveness": value,
+            })
+            state = AffectState("a", "s", frustration=0.8, offended=0.8)
+            state.relationships["b"] = ParticipantRelation(trust=0.9, respect=0.9)
+            apply_event(state, AffectiveEvent(EventType.BOT_MEDIATION, "b"), config)
+            states.append(state)
+        self.assertLess(states[1].frustration, states[0].frustration)
 
-    def test_effective_receptiveness_uses_receptiveness_respect_and_influence(self) -> None:
-        relation = ParticipantRelation(trust=0.7, respect=0.9)
-        influential = ParticipantTraits(assertiveness=0.8, social_influence=0.9)
-        receptive = evaluate_influence(
-            influential, ParticipantTraits(receptiveness=0.8, persistence=0.8), relation
-        )
-        resistant = evaluate_influence(
-            influential, ParticipantTraits(receptiveness=0.1, persistence=0.8), relation
-        )
-        self.assertGreater(receptive.factors["effective_receptiveness"], resistant.factors[
-            "effective_receptiveness"
-        ])
-        self.assertGreater(receptive.calming, resistant.calming)
+    def test_low_credibility_does_not_make_repair_impossible(self) -> None:
+        state = AffectState("a", "s", frustration=1.0)
+        state.relationships["b"] = ParticipantRelation(trust=-1.0, respect=-1.0)
+        apply_event(state, AffectiveEvent(EventType.APOLOGY, "b"), neutral_config())
+        self.assertLess(state.frustration, 1.0)
 
-    def test_respected_influential_bot_can_calm_receptive_listener(self) -> None:
-        decision = evaluate_influence(
-            ParticipantTraits(assertiveness=0.9, social_influence=0.9),
-            ParticipantTraits(receptiveness=0.9, persistence=0.9),
-            ParticipantRelation(trust=0.8, respect=0.95, unresolved_tension=0.1),
-        )
-        self.assertGreater(decision.calming, 0.2)
-        self.assertLess(decision.conflict_risk, 0.5)
+    def test_respect_softens_but_does_not_erase_an_insult(self) -> None:
+        states = []
+        for trust in (-1.0, 1.0):
+            state = AffectState("a", "s")
+            state.relationships["b"] = ParticipantRelation(trust=trust, respect=trust)
+            apply_event(state, AffectiveEvent(EventType.INSULT, "b"), neutral_config())
+            states.append(state)
+        self.assertGreater(states[1].offended, 0)
+        self.assertLess(states[1].offended, states[0].offended)
 
-    def test_incompatible_temperaments_raise_conflict_risk(self) -> None:
-        speaker = ParticipantTraits(assertiveness=0.9, social_influence=0.9)
-        compatible = evaluate_influence(
-            speaker,
-            ParticipantTraits(
-                reactivity=0.1,
-                pride=0.1,
-                receptiveness=0.9,
-                persistence=0.9,
-            ),
-            ParticipantRelation(trust=0.7, respect=0.8),
-        )
-        incompatible = evaluate_influence(
-            speaker,
-            ParticipantTraits(
-                reactivity=0.9,
-                pride=0.9,
-                receptiveness=0.1,
-                persistence=0.2,
-            ),
-            ParticipantRelation(trust=-0.4, respect=0.1),
-        )
-
-        self.assertGreater(incompatible.conflict_risk, compatible.conflict_risk)
-        self.assertLess(incompatible.calming, compatible.calming)
+    def test_observed_playful_style_is_local_and_bounded(self) -> None:
+        relation = ParticipantRelation()
+        for _ in range(20):
+            observe_style(relation, EventType.JOKE)
+        self.assertGreater(relation.observed_style["playful"], 0.9)
+        self.assertLessEqual(relation.observed_style["playful"], 1.0)
 
 
 class StorageTests(unittest.TestCase):
@@ -497,7 +458,7 @@ class StorageTests(unittest.TestCase):
 
     def test_future_state_schema_version_is_rejected(self) -> None:
         raw = AffectState.initial("bot/a", "session:1").to_dict()
-        raw["schema_version"] = 2
+        raw["schema_version"] = 99
         with self.assertRaisesRegex(ValueError, "Unsupported affect state schema version"):
             AffectState.from_dict(raw)
 

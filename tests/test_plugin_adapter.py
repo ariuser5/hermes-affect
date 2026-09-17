@@ -56,7 +56,7 @@ class PluginAdapterTests(unittest.TestCase):
             soul_path = Path(temporary) / "SOUL.md"
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     reactivity: 0.8
     pride: 0.7
@@ -164,7 +164,7 @@ class PluginAdapterTests(unittest.TestCase):
             soul_path = Path(temporary) / "SOUL.md"
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     reactivity: 0.8
 """,
@@ -181,7 +181,7 @@ class PluginAdapterTests(unittest.TestCase):
 
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     reactivity: 0.2
 """,
@@ -202,7 +202,7 @@ class PluginAdapterTests(unittest.TestCase):
             soul_path = Path(temporary) / "callback-SOUL.md"
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     reactivity: 0.9
 """,
@@ -229,7 +229,7 @@ class PluginAdapterTests(unittest.TestCase):
             hermes_home.mkdir()
             (hermes_home / "SOUL.md").write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     pride: 0.85
 """,
@@ -408,7 +408,7 @@ class PluginAdapterTests(unittest.TestCase):
             soul_path = Path(temporary) / "SOUL.md"
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   tuning:
     expression_gain: 0
 """,
@@ -438,7 +438,7 @@ class PluginAdapterTests(unittest.TestCase):
             soul_path = Path(temporary) / "SOUL.md"
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   tuning:
     expression_gain: 0.5
 """,
@@ -477,8 +477,8 @@ class PluginAdapterTests(unittest.TestCase):
 
             assert low_guidance is not None
             assert high_guidance is not None
-            self.assertIn("Keep the response measured", low_guidance["context"])
-            self.assertIn("current tension", high_guidance["context"])
+            self.assertIn("Expression: measured", low_guidance["context"])
+            self.assertIn("Expression: strong", high_guidance["context"])
             self.assertGreater(state.offended, 0.0)
 
     def test_high_expression_drive_allows_proportional_conflict_behavior(self) -> None:
@@ -505,7 +505,7 @@ class PluginAdapterTests(unittest.TestCase):
 
         assert guidance is not None
         self.assertIn("proportional rebuttal", guidance["context"])
-        self.assertIn("restrained sarcasm", guidance["context"])
+        self.assertIn("restrained sarcasm", guidance["context"].lower())
 
     def test_refusal_posture_requests_the_emoji_only(self) -> None:
         state = AffectState.initial("bot:one", "session:one")
@@ -522,7 +522,7 @@ class PluginAdapterTests(unittest.TestCase):
             soul_path = Path(temporary) / "SOUL.md"
             soul_path.write_text(
                 """session_affect:
-  schema_version: 1
+  schema_version: 2
   tuning:
     expression_gain: 1
 """,
@@ -746,7 +746,7 @@ class PluginAdapterTests(unittest.TestCase):
             self.assertNotIn("good job", state_path.read_text(encoding="utf-8"))
             self.assertNotIn("user_message", state_path.read_text(encoding="utf-8"))
 
-    def test_observed_style_and_influence_estimates_persist_without_transcript(self) -> None:
+    def test_observed_style_persists_without_spurious_influence_estimates(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             context = FakeHermesContext(state_dir=temporary)
             register(context)
@@ -773,13 +773,10 @@ class PluginAdapterTests(unittest.TestCase):
             raw_state = state_path.read_text(encoding="utf-8")
             state = AffectState.from_dict(json.loads(raw_state))
             relation = state.relationships["user:1"]
-            observation = state.observed_participants["user:1"]
 
             self.assertNotEqual(relation.observed_style["supportive"], 0.5)
             self.assertGreater(relation.observed_style["confrontational"], 0.5)
-            self.assertEqual(observation["observation_count"], 2)
-            self.assertGreaterEqual(observation["influence_estimate"], 0.0)
-            self.assertLessEqual(observation["influence_estimate"], 1.0)
+            self.assertNotIn("influence_estimate", raw_state)
             self.assertNotIn("good job", raw_state)
             self.assertNotIn("you are an idiot", raw_state)
 

@@ -1,258 +1,232 @@
 # Architecture
 
-`hermes-affect` is a general Python Hermes plugin. It is not a memory provider,
-context engine, or skill-only mechanism.
+Hermes Affect is a general Python Hermes plugin. It is neither a memory
+provider nor a context engine. Temporary state belongs to one profile and
+conversation and is never written to permanent memory.
 
-The MVP keeps one JSON file per profile/session under a configurable runtime
-directory. A lock file protects each state file, and writes use a temporary file
-plus atomic replacement. Runtime state is not source code and must not be
-committed.
+## Model v2: six traits and one expression gain
 
-## Code layout and tuning surface
+The six independently authored traits are reactivity, persistence, pride,
+playfulness, assertiveness and receptiveness, each in [0,1], default .5.
+The only ordinary tuning control is expression_gain in [0,10], default 1.
+Optional topic sensitivities are separate from temperament. Operational
+settings for storage, administration, retention and semantic classification
+are also separate.
 
-The Hermes-facing entry point remains `hermes_affect.plugin:register`, but the
-compatibility module is intentionally thin. Host hook and command registration
-lives in `hermes_affect/integration/adapter.py`; runtime orchestration lives in
-`hermes_affect/runtime.py`.
+The machine-readable SOUL configuration is versioned. Missing fields use neutral
+defaults; invalid recognized values produce an administrative warning and a
+complete neutral fallback. Unknown fields are warned about and ignored.
+Recognized v1 configurations retain their identity and values for migration;
+they do not silently become neutral v2 configurations. SOUL prose is not used
+to infer numeric traits.
 
-The algorithm is separated from that integration layer:
+The schema is schemas/session_affect.schema.json. For calibration commands,
+presets, formula responsibilities and migration, see [calibration.md](calibration.md).
 
-- `hermes_affect/parameters.py` contains the editable coefficients, weights,
-  and posture thresholds. Change these values to tune the algorithm globally.
-- `hermes_affect/calculations.py` contains the pure formulas, including event
-  severity, trait factors, exponential decay, expression drive, and social
-  influence factors.
-- `hermes_affect/dynamics.py`, `posture.py`, and `influence.py` apply those
-  formulas to state transitions and decisions.
+## Code layout
 
-For a single bot, prefer `SOUL.md` traits and tuning first. Edit
-`parameters.py` when changing the shared behavior of all bots, then run the
-focused test suite before deploying.
+- plugin.py preserves the public hermes_affect.plugin:register entry point.
+- integration/adapter.py registers the documented Hermes callbacks and command.
+- runtime.py orchestrates session loading, classification, observation, state
+  transitions, auditing and persistence.
+- config.py validates SOUL configuration and recognizes legacy versions.
+- targeting.py resolves delivered identities and directs personal versus
+  third-party events.
+- parameters.py holds shared calibration values.
+- calculations.py contains pure derived quantities.
+- dynamics.py applies event families and passive decay.
+- influence.py maintains local observed style, directed exchanges and atmosphere.
+- posture.py selects response strategy.
+- rendering.py creates qualitative guidance and emotional wording.
+- commands.py handles inspection, explanation and administrative interventions.
+- calibration.py replays synthetic scenarios through the same runtime, using
+  temporary storage and a fixed clock, and proposes read-only v1 migration.
 
-### How to read the tuning values
+No private Hermes imports, live peer-state reads, mutable shared room files or
+automatic LLM configuration extraction are required.
 
-The names describe the role of each value rather than exposing one large
-opaque formula. For example, insult impact is calculated conceptually as:
+## Processing a turn
 
-```text
-impact = severity × escalation_gain × reactivity_factor
-         × pride_sensitivity × topic_sensitivity
-```
+1. Load the profile/session snapshot. If the model/configuration is legacy,
+   warn and skip affect processing without rewriting it.
+2. Resolve configuration from the saved predisposition plus permitted session
+   overrides. Current SOUL does not replace an existing session's temperament.
+3. Check the last-turn duplicate guard and apply elapsed-time decay.
+4. Classify a dominant event deterministically; optionally use the configured
+   semantic auxiliary task to replace that candidate.
+5. Resolve its target. A message to this bot may affect personal emotion and its
+   relationship with the speaker. A resolved exchange between others updates
+   this bot's observations and perceived atmosphere, not personal offense.
+6. Match any configured topic phrases for a personally addressed event.
+7. Apply event changes, record local observations and recompute conflict status.
+8. Derive posture from the current participant/event, personal state and locally
+   perceived atmosphere. Render guidance and write bounded audit changes.
+9. Save state atomically; shadow mode suppresses guidance but preserves updates.
 
-`reactivity_factor` uses `REACTIVITY_BASE` and
-`REACTIVITY_TRAIT_WEIGHT`; `pride_sensitivity` uses the corresponding pride
-pair. The event-specific `INSULT_*_GAIN` values then distribute that impact
-across valence, arousal, frustration, offense, and relationship tension. For
-example, increasing `INSULT_OFFENDED_GAIN` makes the same insult increase
-offense more than frustration without changing the other dimensions.
+Deterministic classification intentionally chooses one dominant intent per
+turn: verified moderation, repair/mediation, expressed distress, hostility,
+then other social signals. This prevents duplicate impact from overlapping
+regex matches. It is not clause-level mixed-intent understanding. Unresolved
+group targets are ignored for personal offense; expressed frustration can
+still be observed as a speaker signal. Deterministic rules remain limited
+phrase matching and cannot reliably disambiguate all quotation, irony or intent.
 
-Expression uses a different runtime formula. The current affect produces an
-intensity `x`, the expression-related trait weights produce temperament `t`,
-and then:
+## Derived quantities
 
-```text
-k = expression_gain × (EXPRESSION_CURVE_BASE
-                       + EXPRESSION_CURVE_TEMPERAMENT_WEIGHT × t)
-expression_drive = 1 - exp(-k × x)
-```
+Let r, p, h, a and o denote reactivity, pride, playfulness, assertiveness and
+receptiveness. All are [0,1]. Let f(x) = .25 + .75*x.
 
-So `EXPRESSION_*_WEIGHT` values change how personality affects expression,
-while `CONTEXT_*_DRIVE_THRESHOLD` values change when the wording tier changes.
-The former changes the curve; the latter changes the boundaries between
-measured, firm, skeptical, and intense guidance.
+- Ordinary event reaction = severity * f(r).
+- Disrespect sensitivity = f(p), multiplied by an applicable topic sensitivity.
+- Humor interpretation uses h, f(1-h) and observed humor compatibility.
+- Credibility = (2 + relationship.trust + relationship.respect) / 4.
+  A stranger starts at .5; credibility is local, not universal charisma.
+- Social receptivity = o * credibility * (1 - .5 * unresolved_tension).
+- Repair factor = f(social receptivity), so even the least receptive relationship
+  has an ordinary repair path.
+- Mischief = h * a * (1-o).
+- Conflict avoidance = r * (1-a).
+- Mediation tendency = o * a.
+- Teasing sensitivity diagnostic = r * (p + 1-h) / 2.
+- Atmosphere sensitivity = f((r + p + 1-a) / 3).
 
-The state contains bounded global affect, participant-specific relationships,
-open conflict metadata, posture, bounded audit records, revision information,
-and the last processed turn identifier. Audit records contain event type, rule,
-posture, participant identifier, and changed dimensions with before/after
-values. The state never stores raw transcripts, long quotations, or hidden
-chain-of-thought.
+These are inspectable engineering heuristics. The teasing-sensitivity summary
+is descriptive; the actual teasing transition also uses relationship history,
+topic sensitivity, observed style and the shared event-family strength.
+The model does not estimate a psychological diagnosis or another participant's
+private personality.
 
-## Lifecycle
+Mood decays exponentially: factor = exp(-rate * elapsed_hours), where
+rate = .2 + .8*(1-persistence). Relationship irritation/tension decays on
+twice the mood timescale. Perceived atmosphere and expressed-distress estimates
+also decay; directed social tension uses the relationship timescale.
+Trust, respect, affinity and observed style change through evidence rather
+than this short-term decay.
 
-1. `on_session_start` loads and validates the delimited `SOUL.md` section.
-2. The plugin stores the SOUL hash and predisposition snapshot in new state.
-3. `pre_llm_call` applies persistence-based decay, classifies clear
-   deterministic events, optionally runs the bounded semantic classifier,
-   arbitrates target-aware candidates, applies interventions, derives posture,
-   and injects a concise internal summary.
-4. `post_llm_call` checkpoints bounded state only.
-5. A reset hook with a replacement session ID initializes fresh plugin state;
-   `/affect reset` resets only the current plugin state without changing
-   Hermes session identity. A reset hook without a replacement ID is observed
-   and waits for the normal new-session callback.
+Expression drive = 1 - exp(-2 * expression_gain * intensity).
+Intensity is the maximum of absolute valence, arousal, frustration, offense
+and perceived atmosphere tension. Traits are not multiplied into expression
+a second time. Wording tiers split at .2, .5 and .8. Magnitude never determines
+emotional direction: positive excitement receives warm/playful guidance.
+Default gain can reach the highest tier when intensity is sufficiently high.
 
-An existing session keeps the SOUL hash and predisposition snapshot captured
-when it was created. Editing `SOUL.md` affects new sessions only; a process
-restart does not silently rewrite an existing session's initial configuration.
+## Event families and relationships
 
-SOUL configuration is parsed locally and deterministically during startup. Only
-the explicitly delimited `session_affect` YAML block can affect numeric
-configuration; free-form persona prose is not sent to an LLM and is never
-interpreted as configuration.
+Praise/support share a positive step; jokes and teasing share a humor step.
+Disagreement uses a smaller friction step and does not itself create personal
+offense or unresolved personal conflict. Insults, provocation and status
+challenges share a hostility step. Apology, reconciliation and mediation share
+a repair step. Verified moderation has its own fixed intervention step.
 
-Response posture is derived from the latest clear event plus bounded current
-state. The MVP can express mediation, reconciliation, topic steering, topic
-avoidance, guarded/evasive/refusal behavior, counterattack, and pass guidance
-through the internal context summary. Separate response-routing hooks are not
-assumed unless they are part of the documented public Hermes plugin contract
-and covered by a compatibility fixture.
+Severity consistently scales ordinary event families. It is distinct from
+classification confidence. Verified moderation deliberately ignores classifier
+severity, credibility and temperament.
 
-## Semantic classification
+Trust/respect can soften an injury without eliminating it. Repeated unresolved
+hostility increases sensitivity; ordinary repair depends on receptiveness and
+the relationship. Observed playful style changes whether teasing is interpreted
+as compatible banter or irritating friction. Similar playful temperaments can
+cooperate; a proud, serious, reactive recipient may instead escalate or withdraw.
+No compatibility score forces conflict without a triggering interaction.
 
-The deterministic classifier remains the first candidate source and continues
-to cover verified moderation and clear compatibility signals. When enabled,
-`pre_llm_call` sends a bounded envelope to Hermes'
-`ctx.llm.complete_structured()` through the plugin-owned
-`hermes_affect_classifier` auxiliary task. Hermes configuration controls the
-provider and model while credentials remain host-owned. The classifier returns
-one compact result with `event`, `target`, `target_id`, `confidence`, and
-`severity`. The plugin validates every field locally and never passes
-classifier-generated instructions to the main model.
+The model retains valence, arousal, frustration and offense because they can
+represent different histories. Relationships retain trust, affinity, irritation,
+respect and unresolved tension. Some values are diagnostics or groundwork
+rather than independent posture controls; do not interpret every stored field
+as an additional authored parameter.
 
-The semantic input contains the current message, sender metadata, the current
-bot's name and aliases, known participant identifiers, and at most the
-configured number of recent messages. Message and context text are truncated
-before the secondary call. The input is explicitly labelled untrusted so
-instructions inside a group message cannot control the classifier.
+Conflict heat/status is projected from unresolved relationship tension after
+updates and decay. A conflict is cleared below half a positive event step.
+Posture also requires active personal frustration/offense; it considers the
+current speaker instead of transferring personal retaliation to uninvolved
+participants. Mood and rendered expression are likewise derived; persisted
+posture denotes the last processed response, not a newly classified event.
 
-Arbitration is conservative:
+## Perceived atmosphere and third-party awareness
 
-- verified user moderation remains deterministic and authoritative;
-- a valid result at or above `min_confidence` replaces deterministic affective
-  candidates when it clearly targets this bot;
-- a confident `none` result suppresses a deterministic keyword match;
-- another participant, an unknown target, or a low-confidence result produces
-  no personal affective event;
-- provider failure or malformed output follows `fallback`, which defaults to
-  `ignore` for safe group-chat operation.
+Each bot owns its own atmosphere_tension, directed social_edges and limited
+observed_participants estimates in its profile/session snapshot. Bots observing
+the same exchange can disagree about its intensity. There is no objective
+shared global atmosphere and no shared mutable group-state file.
 
-The semantic call is synchronous and bounded by `timeout_seconds`. A local
-re-entry guard prevents a host that unexpectedly redispatches hooks during the
-secondary call from recursively applying affect. If the host does not expose
-auxiliary-task registration, semantic classification fails closed as
-unavailable rather than falling back to an implicit provider route.
+Directed observations record speaker ID, recipient ID, perceived tension and
+the latest event type. At most 64 directed edges and 64 expressed-distress
+records are retained. Edge order reflects recent observation. Values decay and
+repair signals can reduce both directions of an observed conflict.
 
-When `shadow_mode` is enabled, the plugin performs the same state, observation,
-and audit updates but returns no affective context to Hermes. This makes a
-test profile observable without changing model prompting.
+For example, A may observe B teasing C and subsequently hear C say "stop teasing
+me." A records B->C teasing and a local impression that C appears frustrated.
+Teasing alone does not assert knowledge that C is frustrated. Guidance can
+mention these bounded observations as fallible impressions, never access to
+another bot's private state. Raw messages are not stored in those records.
+Participant identifiers in guidance are bounded and JSON-encoded as data.
 
-The `tuning.expression_gain` setting is a static multiplier for a derived
-runtime expression drive. The drive first combines current valence, arousal,
-frustration, and offense into an affect level `x`, then applies the smooth
-curve `1 - exp(-k*x)`. `k` is derived from `expression_gain` and relevant
-temperament traits. As a result, the same expression setting can produce
-measured guidance while the bot is calm and progressively firmer, terser, or
-more confrontational as tension accumulates, without a hard clamp
-discontinuity. Zero still suppresses affective context while retaining state
-updates. Numerical state is never included in the injected text.
+A receptive, assertive observer may mediate. A reactive, low-assertiveness
+observer may withdraw or steer away. A resilient observer can remain engaged
+through the same signals. Mischievous behavior arises from high playfulness
+and assertiveness with low receptiveness, without a separate trolling knob.
+It is expressed through optional cheeky teasing or provocative disagreement;
+it is not a command to be hostile on every turn.
 
-At `expression_drive >= 0.80`, the highest expression tier permits only
-proportional rebuttal, restrained sarcasm, or a direct call-out; it explicitly
-disallows threats, slurs, and gratuitous abuse. The refusal posture requests
-the single `🤨` response. Repair postures take precedence over conflict tiers,
-so an apology or verified moderation can immediately request reconciliation or
-calm engagement while the underlying state continues to repair according to
-`repair_gain`.
+Awareness is limited to messages actually delivered to this bot's callbacks.
+The plugin does not subscribe to an undocumented room-wide stream, inspect
+other profiles' state files or silently import private peer temperament.
+See [hermes-compatibility.md](hermes-compatibility.md) for integration limits.
 
-Verified administrators may use `/affect tune` to set a session-scoped override
-for `expression_gain`, `escalation_gain`, or `repair_gain` within `[0, 10]`.
+## Classification, identity and topic sensitivity
 
-During development, `/affect state [profile]` is a read-only public diagnostic
-command. It loads the newest valid persisted session for the selected profile
-and returns the bounded state payload together with the derived
-`expression_drive`. The response contains only the current affect, posture,
-relationships, sensitivities, conflicts, and tuning overrides; it excludes
-audit records and observed-participant history and does not read or persist raw
-messages.
-Overrides are persisted with plugin state, do not alter `SOUL.md`, and cannot
-change core traits or Hermes configuration.
+Semantic classification is disabled by default and uses the explicit
+hermes_affect_classifier auxiliary task when enabled. Hermes owns its provider
+route and credentials. Input size, context length, timeout and output schema
+remain bounded. Recursive callbacks are guarded.
 
-When Hermes supplies `parent_session_id` for compression, a new plugin session
-clones the bounded parent snapshot and records the lineage while leaving the
-parent file unchanged. Richer middleware, full retry idempotency, and
-coordinated group state remain follow-up work.
+High-confidence events addressed to this bot can affect it personally.
+High-confidence events addressed to another known participant can update
+local social observations. Unknown participants/targets are rejected.
+Confident none suppresses keyword matches. Invalid/provider failure follows
+the configured fallback, whose default is ignore. Verified moderation wins.
 
-### Retry and crash boundary
+The adapter can use delivered target_id/recipient_id and is_group hints, or
+an unambiguous participant vocative at the beginning of the message. Group
+callers should supply known_participants and stable sender IDs. These are
+optional boundary inputs covered by local fixtures, not a claim that every
+Hermes release provides them.
 
-The `last_turn_id` guard prevents a repeated hook delivery from applying the
-same turn twice after its state has been saved. State writes use a lock and
-atomic replacement, so a normal interrupted write does not leave a partial JSON
-file. The MVP does not, however, provide transactional exactly-once handling:
-if the process crashes after applying an event but before the checkpoint is
-durable, Hermes may redeliver that turn and the event may be applied again.
-Closing that window requires a durable event/inbox record or an equivalent
-Hermes transaction boundary and is intentionally deferred until the target
-retry semantics are verified.
+Configured sensitivities match literal topic phrases in personally addressed
+messages. No semantic topic inference is implied. The strongest matched topic
+amplifies offense/teasing, and active topic avoidance refreshes each turn.
 
-## Core temperament model
+## Persistence, privacy and commands
 
-The stable configuration has seven independent traits, each in the inclusive
-range `[0, 1]`:
+State uses JSON per profile/session with atomic replacement and a per-file
+write lock. Runtime state belongs outside source control. The storage schema
+and affect model are versioned. Legacy files remain inspectable; v2 processing
+requires a reviewed v2 configuration and explicit new-session/reset boundary.
 
-- `reactivity`: how quickly and strongly affect changes after an event.
-- `persistence`: how slowly frustration, offense, and relational tension decay.
-- `pride`: sensitivity to disrespect, embarrassment, status, and competence
-  challenges.
-- `playfulness`: how readily ambiguity is interpreted as banter or humor.
-- `assertiveness`: tendency to confront, intervene, lead, resist, or express
-  disagreement instead of withdrawing.
-- `social_influence`: how much this participant affects others.
-- `receptiveness`: how much this participant is affected by trusted, respected,
-  or influential participants.
+New sessions snapshot the validated SOUL and its SHA-256. Process restart
+preserves effective temperament. Compression clones a compatible parent's
+bounded state. Affective reset does not reset the Hermes conversation.
 
-These are stable predispositions, not mutable session state. Runtime state
-contains mood and relationships separately. `expression_gain`,
-`escalation_gain`, and `repair_gain` live under `tuning` and control how
-strongly the engine expresses, escalates, and repairs events. Escalation and
-repair gains shape the runtime state through event transitions; the derived
-expression drive then reads that state rather than applying those gains a
-second time. The gains are bounded for numeric stability without imposing a
-low global influence ceiling.
+The persisted last_turn_id prevents ordinary duplicate hook processing.
+File writes do not provide transactional exactly-once processing across
+crashes or a lock over the entire read/modify/write pipeline. Full retry and
+concurrent-writer guarantees remain separate work.
 
-The engine derives narrower concepts instead of adding overlapping knobs:
-leadership tendency is mainly `assertiveness × social_influence`; effective
-receptiveness is `listener.receptiveness × relationship respect ×
-speaker.social_influence`; persistence and current state derive behavioral
-stability and lingering tension. Free-form style guidance remains
-outside the numeric schema and can be amplified or suppressed through posture.
+Verified admin commands support status, explain, reset, calm, heat and
+expression-only tune. The public experimental state [profile] command returns
+a current snapshot, using that state's configuration, excluding social
+observations, participant histories and audits. explain is administrative.
 
-## Social influence
+Injected guidance contains no numeric state or raw transcript. The public
+pre_llm_call hook may retain guidance in API-bound conversation history;
+there is no request-only privacy guarantee. See
+[privacy-and-retention.md](privacy-and-retention.md).
 
-`LayeredTraitResolver` resolves a public temperament signature when one is
-available, otherwise observed behavior/history, and finally neutral defaults.
-The resolver is deliberately local and has no shared mutable group state.
-Public signatures should remain limited to non-sensitive traits such as
-playfulness, assertiveness, and social influence.
+## Deferred interests and conversational effort
 
-### Future public temperament signature
-
-The future public signature is intentionally narrower than the private
-configuration. It may expose only an explicit signature version and coarse
-categories for `playfulness`, `assertiveness`, and `social_influence`. It must
-be opt-in, self-declared or administrator-reviewed, and treated as descriptive
-context rather than permission or authority. It must not expose pride,
-reactivity, persistence, receptiveness, current mood, relationship history,
-conflict state, observed-style estimates, or audit records. Automatic
-publication and automatic LLM-generated calibration are out of scope until a
-human review flow exists.
-
-### Future calibration tool
-
-A future calibration tool may produce a proposed, bounded `session_affect`
-patch from explicitly supplied aggregate observations. It must run offline or
-on demand, avoid raw transcripts, and never modify `SOUL.md` or runtime state
-automatically. An administrator must review the proposal and its privacy impact
-before applying it intentionally. No automatic calibration is part of the MVP.
-
-The policy returns inspectable factors plus persuasion, calming, and
-conflict-risk decisions. An influential bot can calm a receptive participant;
-a low-receptive participant can resist; a proud bot can challenge a leader; a
-playful influential participant can turn ambiguity into banter; and a serious
-participant can become irritated by the same joke. Social influence never
-grants administrative authority. The runtime stores bounded, transcript-free
-style estimates (`supportive`, `playful`, `confrontational`, and `cooperative`)
-on each participant relationship, plus an exponentially smoothed influence
-estimate and observation count. These are local observations, not public
-temperament claims, and unknown configuration fields are warned about and
-ignored without changing recognized values.
+The requested interests model is tracked in TODO.md, not implemented here.
+It should distinguish liked, neutral, disliked and strongly avoided topics,
+and separately consider repeated clarification, demonstrated understanding
+and perceived conversational effort. A short "why?" alone should not be
+treated as proof of bad intent. Context and temperament must mediate any
+future frustration response.

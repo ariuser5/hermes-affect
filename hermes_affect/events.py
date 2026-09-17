@@ -22,6 +22,7 @@ class EventType(str, Enum):
     BOT_PROVOCATION = "bot_provocation"
     TOPIC_STEERING = "topic_steering"
     LEADERSHIP_CHALLENGE = "challenge_to_leadership"
+    FRUSTRATION = "expressed_frustration"
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,13 @@ class EventClassifier:
     """Classify only clear signals; ambiguous text remains unclassified."""
 
     _rules = (
+        (
+            EventType.FRUSTRATION,
+            (r"\bi am frustrated\b", r"\bi'm frustrated\b", r"\bstop teasing me\b",
+             r"\bthis is getting annoying\b"),
+            0.90,
+            "expressed_frustration",
+        ),
         (
             EventType.PRAISE,
             (r"\bgood job\b", r"\bwell done\b", r"\bexcellent\b", r"\bthank you\b"),
@@ -199,4 +207,25 @@ class EventClassifier:
                         matched_rule=matched_rule,
                     )
                 )
-        return events
+        return normalize_events(events)
+
+
+def normalize_events(events: list[AffectiveEvent]) -> list[AffectiveEvent]:
+    """One dominant intent per turn; authority precedes repair, then hostile signals.
+
+    This intentionally avoids multiplying one phrase across overlapping regex rules.
+    Semantic classification already supplies one intent. Mixed intent composition is
+    deferred until clause-level targeting exists.
+    """
+    priority = (
+        EventType.USER_MODERATION, EventType.APOLOGY, EventType.RECONCILIATION,
+        EventType.BOT_MEDIATION, EventType.FRUSTRATION, EventType.BOT_PROVOCATION,
+        EventType.INSULT, EventType.LEADERSHIP_CHALLENGE, EventType.TOPIC_STEERING,
+        EventType.TEASING, EventType.JOKE, EventType.DISAGREEMENT, EventType.SUPPORT,
+        EventType.PRAISE,
+    )
+    for kind in priority:
+        matches = [e for e in events if e.event_type == kind]
+        if matches:
+            return [max(matches, key=lambda e: e.confidence)]
+    return []

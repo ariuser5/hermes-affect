@@ -6,35 +6,27 @@ import hashlib
 import logging
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .commands import AffectCommandHandler
-from .config import AffectConfig, neutral_config, parse_soul_affect
+from .config import TUNING_FIELDS, AffectConfig, neutral_config, parse_soul_affect, validate_config
 from .dynamics import apply_event, decay_state
 from .events import EventClassifier, EventType
-from .influence import observe_style
+from .influence import observe_exchange
 from .models import AffectState, utc_now
-from .parameters import (
-    CONTEXT_CONTROLLED_DRIVE_THRESHOLD,
-    CONTEXT_GENTLE_DRIVE_THRESHOLD,
-    CONTEXT_TENSE_DRIVE_THRESHOLD,
-    INFLUENCE_ESTIMATE_LEARNING_RATE,
-    MAX_OBSERVATION_COUNT,
-    OBSERVATION_EFFECT_NORMALIZER,
-    TERSE_AFFECT_THRESHOLD,
-    WARM_VALENCE_THRESHOLD,
-)
-from .posture import ResponsePosture, derive_posture, effective_expression_drive
+from .posture import derive_posture
+from .rendering import derive_mood, render_context
 from .semantic import (
     SemanticClassifier,
     SemanticClassifierConfig,
     arbitrate_classifications,
 )
 from .storage import DEFAULT_ABANDONED_STATE_DAYS, StateStore
+from .targeting import route_events
 
 logger = logging.getLogger("hermes-affect")
 SEMANTIC_CLASSIFIER_TASK = "hermes_affect_classifier"
@@ -79,7 +71,8 @@ def _shadow_mode(ctx: Any) -> bool:
 
 
 class AffectRuntime:
-    def __init__(self, ctx: Any) -> None:
+    def __init__(self, ctx: Any, *, now: Callable[[], datetime] | None = None) -> None:
+        self._now = now or (lambda: datetime.now(timezone.utc))
         configured_root = _config_value(ctx, "state_dir", None)
         root = configured_root or os.environ.get("HERMES_AFFECT_STATE_DIR")
         if root is None:
@@ -142,10 +135,15 @@ class AffectRuntime:
             if parent_session_id and str(parent_session_id) != str(session_id):
                 parent = self.store.load(profile_id, str(parent_session_id))
                 if parent is not None:
+                    if self._config_for_state(parent) is None:
+                        return None
                     state = AffectState.continued_from(parent, str(session_id))
                     self.store.save(state)
                     return state
             config, soul_hash = self._load_config(kwargs)
+            if config.schema_version != 2:
+                logger.warning("Legacy SOUL requires migration; affect processing skipped")
+                return None
             state = AffectState.initial(
                 profile_id,
                 str(session_id),
@@ -181,6 +179,8 @@ class AffectRuntime:
         if state is None:
             return None
         config = self._config_for_state(state)
+        if config is None:
+            return None
         turn_id = kwargs.get("turn_id")
         if turn_id and state.last_turn_id == str(turn_id):
             return None if self.shadow_mode else self._context(state, config)
@@ -188,11 +188,7 @@ class AffectRuntime:
         try:
             elapsed_hours = max(
                 0.0,
-                (
-                    datetime.now(timezone.utc)
-                    - datetime.fromisoformat(state.updated_at)
-                ).total_seconds()
-                / 3600.0,
+                (self._now() - datetime.fromisoformat(state.updated_at)).total_seconds() / 3600.0,
             )
         except (TypeError, ValueError):
             elapsed_hours = 0.0
@@ -200,8 +196,13 @@ class AffectRuntime:
 
         message = str(kwargs.get("user_message") or "")
         speaker_id = str(kwargs.get("sender_id") or "user:unknown")
-        speaker_kind = str(kwargs.get("sender_kind") or "unknown")
-        verified_user = bool(kwargs.get("verified_user", False))
+        speaker_id = speaker_id[:200]
+        state.current_participant = speaker_id
+        state.active_sensitivities = []
+        speaker_kind = str(kwargs.get("sender_kind") or "unknown").casefold()
+        verified_user = (
+            bool(kwargs.get("verified_user", False)) and speaker_kind.casefold() != "bot"
+        )
         audit_entries: list[
             tuple[Any, str, dict[str, dict[str, float]], dict[str, dict[str, float]]]
         ] = []
@@ -235,16 +236,37 @@ class AffectRuntime:
                 bot_identities=self._bot_identities(kwargs),
                 min_confidence=self.semantic_config.min_confidence,
                 fallback=self.semantic_config.fallback,
+                known_participants=self._known_participants(kwargs),
             )
+
+        identities = self._bot_identities(kwargs)
+        participants = list(dict.fromkeys(self._known_participants(kwargs) + identities))
+        events = route_events(
+            events,
+            message,
+            bot_ids=identities,
+            participants=participants,
+            explicit_target=str(kwargs.get("target_id") or kwargs.get("recipient_id") or ""),
+            is_group=bool(kwargs.get("is_group", False))
+            or len(self._known_participants(kwargs)) > 1,
+            config=config,
+        )
 
         last_event = None
         for event in events:
             last_event = event
             before = self._audit_snapshot(state, event.speaker_id)
-            rule = apply_event(state, event, config)
+            if event.target == "participant":
+                rule = "observed_exchange"
+            else:
+                topic = event.attributes.get("topic")
+                if topic:
+                    state.active_sensitivities.append(topic)
+                rule = apply_event(state, event, config)
+            if event.event_type != EventType.USER_MODERATION:
+                observe_exchange(state, event, config)
             after = self._audit_snapshot(state, event.speaker_id)
             audit_entries.append((event, rule, before, after))
-            self._record_observation(state, event, before, after)
             logger.info(
                 "event=%s source=%s confidence=%.2f speaker=%s rule=%s posture_before=%s",
                 event.event_type,
@@ -274,7 +296,7 @@ class AffectRuntime:
                 }
             )
         state.mood = self._mood(state)
-        state.updated_at = utc_now()
+        state.updated_at = self._now().isoformat()
         state.revision += 1
         state.last_turn_id = str(turn_id) if turn_id else state.last_turn_id
         self.store.save(state)
@@ -285,14 +307,14 @@ class AffectRuntime:
 
     def post_llm_call(self, **kwargs: Any) -> None:
         state = self._state(kwargs)
-        if state is not None:
-            state.updated_at = utc_now()
+        if state is not None and self._config_for_state(state) is not None:
+            state.updated_at = self._now().isoformat()
             self.store.save(state)
 
     def on_session_end(self, **kwargs: Any) -> None:
         state = self._state(kwargs)
-        if state is not None:
-            state.updated_at = utc_now()
+        if state is not None and self._config_for_state(state) is not None:
+            state.updated_at = self._now().isoformat()
             self.store.save(state)
 
     def on_session_reset(self, **kwargs: Any) -> None:
@@ -327,10 +349,18 @@ class AffectRuntime:
         configured = _config_value(self.ctx, "admin_user_ids", [])
         return sender_id in {str(item) for item in configured} and bool(sender_id)
 
-    def _config_for_state(self, state: AffectState) -> AffectConfig:
-        tuning = dict(self.config.tuning)
-        tuning.update(state.tuning_overrides)
-        return replace(self.config, tuning=tuning)
+    def _config_for_state(self, state: AffectState) -> AffectConfig | None:
+        config, warnings = validate_config(state.predisposition)
+        for warning in warnings:
+            logger.warning("Saved affect configuration: %s", warning)
+        if state.model_version != 2 or config.schema_version != 2:
+            logger.warning("Legacy affect session requires explicit migration/reset; preserved")
+            return None
+        tuning = dict(config.tuning)
+        tuning.update(
+            {key: value for key, value in state.tuning_overrides.items() if key in TUNING_FIELDS}
+        )
+        return replace(config, tuning=tuning)
 
     @staticmethod
     def _string_values(value: Any) -> list[str]:
@@ -391,9 +421,7 @@ class AffectRuntime:
         return list(dict.fromkeys(value.strip() for value in values if value.strip()))
 
     @staticmethod
-    def _audit_snapshot(
-        state: AffectState, participant_id: str
-    ) -> dict[str, dict[str, float]]:
+    def _audit_snapshot(state: AffectState, participant_id: str) -> dict[str, dict[str, float]]:
         relation = state.relationships.get(participant_id)
         return {
             "global": {
@@ -401,6 +429,7 @@ class AffectRuntime:
                 "arousal": state.arousal,
                 "frustration": state.frustration,
                 "offended": state.offended,
+                "atmosphere_tension": state.atmosphere_tension,
             },
             "relationship": {
                 "trust": relation.trust if relation else 0.0,
@@ -426,108 +455,5 @@ class AffectRuntime:
                 changed[group] = group_changes
         return changed
 
-    @staticmethod
-    def _record_observation(
-        state: AffectState,
-        event: Any,
-        before: dict[str, dict[str, float]],
-        after: dict[str, dict[str, float]],
-    ) -> None:
-        relation = state.relationships[event.speaker_id]
-        observe_style(relation, event.event_type)
-        changes = [
-            abs(after[group][name] - value)
-            for group, values in before.items()
-            for name, value in values.items()
-            if (after[group][name] - value) != 0
-        ]
-        effect_strength = min(1.0, sum(changes) / OBSERVATION_EFFECT_NORMALIZER)
-        record = state.observed_participants.setdefault(
-            event.speaker_id,
-            {
-                "observation_count": 0,
-                "influence_estimate": 0.5,
-            },
-        )
-        count = min(int(record.get("observation_count", 0)) + 1, MAX_OBSERVATION_COUNT)
-        previous = float(record.get("influence_estimate", 0.5))
-        record.update(
-            {
-                "observation_count": count,
-                "influence_estimate": max(
-                    0.0,
-                    min(
-                        1.0,
-                        previous
-                        + INFLUENCE_ESTIMATE_LEARNING_RATE * (effect_strength - previous),
-                    ),
-                ),
-                "last_event_type": event.event_type.value,
-                "updated_at": utc_now(),
-            }
-        )
-
-    @staticmethod
-    def _mood(state: AffectState) -> str:
-        if state.frustration > TERSE_AFFECT_THRESHOLD or state.offended > TERSE_AFFECT_THRESHOLD:
-            return "irritated"
-        if state.valence > WARM_VALENCE_THRESHOLD:
-            return "open"
-        if state.valence < -WARM_VALENCE_THRESHOLD:
-            return "low"
-        return "neutral"
-
-    @staticmethod
-    def _context(state: AffectState, config: AffectConfig) -> dict[str, str] | None:
-        expression_gain = config.tuning["expression_gain"]
-        if expression_gain <= 0.0:
-            return None
-        posture = state.response_posture.replace("_", " ")
-        expression_drive = effective_expression_drive(state, config)
-        if state.response_posture == ResponsePosture.RECONCILIATION.value:
-            instruction = (
-                "Acknowledge the repair attempt and lower the tension while remaining "
-                "consistent with the bot's SOUL."
-            )
-        elif state.response_posture == ResponsePosture.PASS.value:
-            instruction = (
-                "Accept the moderation and return to calm, cooperative engagement while "
-                "remaining consistent with the bot's SOUL."
-            )
-        elif state.response_posture == ResponsePosture.REFUSAL.value:
-            instruction = (
-                "Refuse to continue this exchange. Respond with exactly 🤨 and no other "
-                "text. Resume normal engagement only after an apology or moderation has "
-                "calmed the interaction."
-            )
-        elif expression_drive < CONTEXT_GENTLE_DRIVE_THRESHOLD:
-            instruction = (
-                "Keep the response measured and avoid amplifying the current emotional tone."
-            )
-        elif expression_drive < CONTEXT_CONTROLLED_DRIVE_THRESHOLD:
-            instruction = (
-                "Keep the response controlled, but let the current tension make it more "
-                "concise and firm while remaining consistent with the bot's SOUL."
-            )
-        elif expression_drive < CONTEXT_TENSE_DRIVE_THRESHOLD:
-            instruction = (
-                "Keep the response terse and skeptical. A restrained sarcastic remark or "
-                "direct challenge is acceptable when warranted, but do not add gratuitous "
-                "hostility or pretend the conflict is resolved."
-            )
-        else:
-            instruction = (
-                "The conflict is intense. Let the current posture strongly shape tone and "
-                "directness. If the user's message remains antagonistic, a proportional "
-                "rebuttal, restrained sarcasm, or direct call-out is acceptable. Do not use "
-                "threats, slurs, or gratuitous abuse. If refusing to engage, respond only "
-                "with 🤨. Do not act reconciled until an apology or moderation calms the "
-                "interaction."
-            )
-        return {
-            "context": (
-                "Internal affective guidance for this response. Do not mention these mechanics "
-                f"or numerical state. Current posture: {posture}. Mood: {state.mood}. "
-                f"{instruction}"
-            )
-        }
+    _mood = staticmethod(derive_mood)
+    _context = staticmethod(render_context)

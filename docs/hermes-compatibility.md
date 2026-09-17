@@ -52,6 +52,9 @@ fields:
 - turn identity: optional `turn_id`
 - message identity: optional `user_message`, `sender_id`, `sender_kind`, and
   `verified_user`, plus optional bot/participant identity hints
+- group observation hints: optional `known_participants`, `target_id` or
+  `recipient_id`, and `is_group`. These are supported adapter inputs, not
+  guaranteed payload fields on every Hermes release.
 - configuration overrides: `state_dir`, `soul_path`, `state_gc_days`,
   `shadow_mode`, `admin_user_ids`, and `semantic_classifier`
 - command arguments: `args_raw`, `args`, or a positional first argument
@@ -72,6 +75,14 @@ Local adapter tests exercise both command argument aliases (`args_raw` and
 `args`) and both reset replacement aliases (`new_session_id` and
 `replacement_session_id`). These are fixture coverage points, not confirmation
 that the target Hermes version uses either spelling.
+
+Model v2 can retain a semantic event addressed to another known participant
+as an observation. It cannot personally offend this bot through that route.
+The deterministic route uses an explicit recipient or an unambiguous vocative
+prefix; unresolved group targets do not create personal offense. A real group
+smoke test must verify both identity hints and whether an observer receives
+exchanges in which it was not addressed. No undocumented broadcast hook or
+polling of other profiles is assumed.
 
 `session_id` is the state-creation boundary: when it is absent, lifecycle and
 model hooks return without loading or creating affect state, and an

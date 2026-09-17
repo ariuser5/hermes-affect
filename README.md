@@ -25,17 +25,35 @@ portable plugin implementation.
 
 ## Session affect configuration
 
-The machine-readable `session_affect` section uses seven stable traits:
+The version-2 machine-readable `session_affect` section uses six stable traits:
 `reactivity`, `persistence`, `pride`, `playfulness`, `assertiveness`,
-`social_influence`, and `receptiveness`. Each is inclusive `[0, 1]`. Event
-strength controls are separate under `tuning`: `expression_gain`,
-`escalation_gain`, and `repair_gain`. Missing fields use neutral defaults;
+`receptiveness`. Each is inclusive `[0, 1]`. The single per-bot tuning control
+is `expression_gain`; escalation and repair derive from temperament and the
+relationship. Missing fields use neutral defaults;
 invalid recognized values fall back safely with an administrative warning.
 
 The full authoring schema is [`schemas/session_affect.schema.json`](schemas/session_affect.schema.json).
 Derived concepts and configuration behavior are documented in
 [`docs/architecture.md`](docs/architecture.md). Unknown fields are ignored
 with an administrative warning.
+
+Each bot now maintains its own perceived atmosphere and observations of directed
+exchanges among known participants. Temperament can produce playful provocation,
+sensitivity to teasing, conflict avoidance, confrontation and mediation.
+Awareness is limited to messages actually delivered to the bot.
+
+Compare temperaments without touching a running bot:
+
+```bash
+python -m hermes_affect.calibration --scenario banter --compare
+python -m hermes_affect.calibration --scenario group --compare
+python -m hermes_affect.calibration --scenario repair --sweep receptiveness --json
+```
+
+See [the calibration guide](docs/calibration.md) for examples, derived controls,
+administrative `/affect explain` and read-only v1 migration proposals.
+Existing v1 sessions are preserved and require a reviewed migration/reset;
+the reduced model is not numerically equivalent to v1.
 
 ## Development
 

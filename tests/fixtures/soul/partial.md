@@ -1,6 +1,6 @@
 session_affect:
-  schema_version: 1
+  schema_version: 2
   traits:
     pride: 0.8
   tuning:
-    repair_gain: 1.5
+    expression_gain: 1.5

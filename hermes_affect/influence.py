@@ -1,161 +1,93 @@
-"""Inspectable participant-to-participant social influence policy."""
+"""Local social perception; no global atmosphere or access to other bot state."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Protocol
-
-from .calculations import (
-    calming_factor,
-    persistence_buffer,
-    pride_pressure,
-    tension_pressure,
-    trust_support,
-)
-from .calculations import (
-    conflict_risk as calculate_conflict_risk,
-)
+from .calculations import event_severity, temperament_drives
 from .config import AffectConfig
-from .events import EventType
-from .models import ParticipantRelation, clamp, utc_now
-from .parameters import STYLE_LEARNING_RATE, STYLE_SIGNALS
+from .events import AffectiveEvent, EventType
+from .models import SOCIAL_RECORD_LIMIT, AffectState, ParticipantRelation, clamp, utc_now
+from .parameters import HOSTILITY_STEP, POSITIVE_STEP, REPAIR_STEP, STYLE_LEARNING_RATE
 
-OBSERVED_STYLE_FIELDS = (
-    "supportive",
-    "playful",
-    "confrontational",
-    "cooperative",
+HOSTILE_EVENTS = frozenset(
+    {
+        EventType.INSULT,
+        EventType.BOT_PROVOCATION,
+        EventType.LEADERSHIP_CHALLENGE,
+    }
 )
+REPAIR_EVENTS = frozenset({EventType.APOLOGY, EventType.RECONCILIATION, EventType.BOT_MEDIATION})
+POSITIVE_EVENTS = frozenset({EventType.PRAISE, EventType.SUPPORT, EventType.JOKE})
 
-def observe_style(
-    relation: ParticipantRelation,
-    event_type: EventType,
-    *,
-    learning_rate: float = STYLE_LEARNING_RATE,
-) -> None:
-    """Update bounded style estimates without retaining message content."""
 
-    rate = clamp(learning_rate, 0.0, 1.0)
-    signals = STYLE_SIGNALS.get(event_type, (0.5, 0.5, 0.5, 0.5))
-    for field_name, signal in zip(OBSERVED_STYLE_FIELDS, signals):
-        previous = relation.observed_style.get(field_name, 0.5)
-        relation.observed_style[field_name] = clamp(previous + rate * (signal - previous), 0.0, 1.0)
+def observe_style(relation: ParticipantRelation, event_type: EventType) -> None:
+    """Four binary behavioral signals replace the old 52-value style table."""
+    signals = {
+        "supportive": event_type in POSITIVE_EVENTS | REPAIR_EVENTS,
+        "playful": event_type in {EventType.JOKE, EventType.TEASING},
+        "confrontational": event_type in HOSTILE_EVENTS | {EventType.TEASING},
+        "cooperative": event_type in POSITIVE_EVENTS | REPAIR_EVENTS | {EventType.TOPIC_STEERING},
+    }
+    for name, signal in signals.items():
+        previous = relation.observed_style.get(name, 0.5)
+        relation.observed_style[name] = previous + STYLE_LEARNING_RATE * (float(signal) - previous)
     relation.updated_at = utc_now()
 
 
-@dataclass(frozen=True)
-class ParticipantTraits:
-    """Public or locally resolved temperament, with no mutable group state."""
+def observe_exchange(state: AffectState, event: AffectiveEvent, config: AffectConfig) -> None:
+    """Observe a resolved event. Receiving hostility is not proof of distress."""
+    relation = state.relationships.setdefault(event.speaker_id, ParticipantRelation())
+    observe_style(relation, event.event_type)
+    severity = event_severity(event)
+    sensitivity = temperament_drives(config)["atmosphere_sensitivity"]
+    hostile = event.event_type in HOSTILE_EVENTS
+    teasing = event.event_type == EventType.TEASING
+    repair = event.event_type in REPAIR_EVENTS
+    amount = HOSTILITY_STEP * severity * sensitivity if hostile or teasing else 0.0
+    if teasing:
+        amount *= 1.0 - config.traits["playfulness"]
+    if event.event_type == EventType.FRUSTRATION:
+        amount = HOSTILITY_STEP * severity * sensitivity
+    if repair or event.event_type in POSITIVE_EVENTS:
+        step = REPAIR_STEP if repair else POSITIVE_STEP
+        amount = -step * severity
+    state.atmosphere_tension = clamp(state.atmosphere_tension + amount, 0.0, 1.0)
 
-    reactivity: float = 0.5
-    persistence: float = 0.5
-    pride: float = 0.5
-    playfulness: float = 0.5
-    assertiveness: float = 0.5
-    social_influence: float = 0.5
-    receptiveness: float = 0.5
-
-    @classmethod
-    def from_config(cls, config: AffectConfig) -> ParticipantTraits:
-        return cls(**{name: config.traits[name] for name in cls.__dataclass_fields__})
-
-
-class ParticipantTraitResolver(Protocol):
-    def resolve(self, participant_id: str) -> ParticipantTraits: ...
-
-
-@dataclass
-class NeutralTraitResolver:
-    traits: dict[str, ParticipantTraits] = field(default_factory=dict)
-    neutral: ParticipantTraits = field(default_factory=ParticipantTraits)
-
-    def resolve(self, participant_id: str) -> ParticipantTraits:
-        return self.traits.get(participant_id, self.neutral)
-
-
-@dataclass
-class LayeredTraitResolver:
-    """Resolve public temperament, then observed behavior, then neutral values."""
-
-    public_signatures: dict[str, ParticipantTraits] = field(default_factory=dict)
-    observed_traits: dict[str, ParticipantTraits] = field(default_factory=dict)
-    neutral: ParticipantTraits = field(default_factory=ParticipantTraits)
-
-    def resolve(self, participant_id: str) -> ParticipantTraits:
-        return (
-            self.public_signatures.get(participant_id)
-            or self.observed_traits.get(participant_id)
-            or self.neutral
+    if event.target_id and event.target_id != event.speaker_id:
+        edge = next(
+            (
+                e
+                for e in state.social_edges
+                if e["speaker_id"] == event.speaker_id and e["target_id"] == event.target_id
+            ),
+            None,
         )
+        if edge is None:
+            edge = {"speaker_id": event.speaker_id, "target_id": event.target_id, "tension": 0.0}
+            state.social_edges.append(edge)
+        else:
+            state.social_edges.remove(edge)
+            state.social_edges.append(edge)
+        edge["tension"] = clamp(edge["tension"] + amount, 0.0, 1.0)
+        edge["last_event"] = event.event_type.value
+        if repair:
+            for reverse in state.social_edges:
+                if (
+                    reverse["speaker_id"] == event.target_id
+                    and reverse["target_id"] == event.speaker_id
+                ):
+                    reverse["tension"] = clamp(reverse["tension"] + amount, 0.0, 1.0)
+        del state.social_edges[:-SOCIAL_RECORD_LIMIT]
 
-
-@dataclass(frozen=True)
-class InfluenceDecision:
-    persuasion: float
-    calming: float
-    conflict_risk: float
-    factors: dict[str, float]
-
-
-def evaluate_influence(
-    speaker: ParticipantTraits,
-    listener: ParticipantTraits,
-    relation: ParticipantRelation,
-) -> InfluenceDecision:
-    """Return separate, inspectable social policy factors.
-
-    Administrative identity is intentionally absent. A speaker's effect comes
-    from assertiveness and social influence; a listener's effective receptivity
-    also depends on relationship respect. This keeps influence distinct from
-    permission to administer the plugin.
-    """
-
-    leadership_tendency = speaker.assertiveness * speaker.social_influence
-    effective_receptiveness = (
-        listener.receptiveness * max(relation.respect, 0.0) * speaker.social_influence
-    )
-    trust_support_factor = trust_support(relation.trust)
-    tension_pressure_factor = tension_pressure(relation)
-    pride_pressure_factor = pride_pressure(
-        listener.pride,
-        listener.reactivity,
-        listener.assertiveness,
-    )
-    persistence_buffer_factor = persistence_buffer(
-        listener.persistence,
-        tension_pressure_factor,
-    )
-
-    persuasion = clamp(
-        leadership_tendency * effective_receptiveness * trust_support_factor
-    )
-    calming = clamp(
-        calming_factor(
-            persuasion,
-            persistence_buffer_factor,
-            tension_pressure_factor,
+    # Only expressed frustration raises an estimate of that speaker's distress.
+    if event.event_type == EventType.FRUSTRATION:
+        record = state.observed_participants.setdefault(event.speaker_id, {"frustration": 0.0})
+        record["frustration"] = clamp(
+            record.get("frustration", 0.0) + severity * HOSTILITY_STEP, 0.0, 1.0
         )
-    )
-    conflict_risk_value = clamp(
-        calculate_conflict_risk(
-            tension_pressure_factor,
-            pride_pressure_factor,
-            persistence_buffer_factor,
-            calming,
-        ),
-        0.0,
-        1.0,
-    )
-    return InfluenceDecision(
-        persuasion=persuasion,
-        calming=calming,
-        conflict_risk=conflict_risk_value,
-        factors={
-            "leadership_tendency": leadership_tendency,
-            "effective_receptiveness": effective_receptiveness,
-            "trust_support": trust_support_factor,
-            "tension_pressure": tension_pressure_factor,
-            "pride_pressure": pride_pressure_factor,
-            "persistence_buffer": persistence_buffer_factor,
-        },
-    )
+    elif repair and event.speaker_id in state.observed_participants:
+        record = state.observed_participants[event.speaker_id]
+        record["frustration"] = clamp(
+            record.get("frustration", 0.0) - REPAIR_STEP * severity, 0.0, 1.0
+        )
+    while len(state.observed_participants) > SOCIAL_RECORD_LIMIT:
+        del state.observed_participants[next(iter(state.observed_participants))]

@@ -17,6 +17,15 @@ posture, revision timestamps, and the last processed turn identifier. State is
 subject to configurable garbage collection; the initial documented default is
 90 days for abandoned sessions.
 
+Model v2 additionally stores the bot's own perceived atmosphere, at most 64
+directed social edges and 64 expressed-distress estimates. These are fallible
+local impressions from delivered events, not access to others' private
+emotions or a shared global room state. They retain identifiers, bounded
+numeric values and event labels, never raw messages. Short qualitative
+impressions may enter injected guidance and therefore API-bound history.
+The public state snapshot exposes perceived atmosphere but excludes these
+third-party observations. Authenticated `/affect explain` includes them.
+
 Garbage collection runs on session startup and examines only valid state JSON
 files older than the configured threshold. It acquires the per-file lock before
 removing a file and skips files with an active or stale lock. A stale lock is
@@ -70,6 +79,6 @@ Disable or remove this public diagnostic before exposing the command to
 untrusted users.
 
 Any future public temperament signature must be opt-in and limited to coarse,
-reviewed categories for playfulness, assertiveness, and social influence. It
+reviewed categories such as playfulness and assertiveness. It
 must never publish private affect, relationship history, observed participant
 style, influence estimates, or audit records.
