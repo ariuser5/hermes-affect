@@ -339,6 +339,7 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                         user_message="synthetic",
                     )
                     updated = runtime.store.load("a", "s")
+                    assert updated is not None
                     effects.append(
                         sum(
                             abs(getattr(updated, name) - getattr(state, name))
@@ -377,6 +378,7 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                 known_participants=["a", "b", "c"],
             )
             state = runtime.store.load("a", "s")
+            assert state is not None
             self.assertEqual(state.social_edges, [])
             self.assertEqual(state.offended, 0)
 
@@ -401,7 +403,9 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                 )
             )
             self.assertIsNone(runtime.store.load("a", "child"))
-            self.assertEqual(runtime.store.load("a", "parent").model_version, 1)
+            parent_state = runtime.store.load("a", "parent")
+            assert parent_state is not None
+            self.assertEqual(parent_state.model_version, 1)
 
     def test_restart_uses_snapshot_for_subsequent_behavior(self):
         with tempfile.TemporaryDirectory() as root:
@@ -421,8 +425,11 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                 profile_id="a", session_id="s", user_message="good job", sender_id="b", turn_id="1"
             )
             state = restarted.store.load("a", "s")
+            assert state is not None
             self.assertAlmostEqual(state.valence, 0.12 * (0.25 + 0.75 * 0.8))
-            self.assertEqual(restarted._config_for_state(state).traits["reactivity"], 0.8)
+            effective_config = restarted._config_for_state(state)
+            assert effective_config is not None
+            self.assertEqual(effective_config.traits["reactivity"], 0.8)
 
     def test_legacy_state_is_not_written_until_explicit_reset(self):
         with tempfile.TemporaryDirectory() as root:
@@ -459,7 +466,9 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                 sender_id="admin",
                 verified_user=True,
             )
-            self.assertEqual(runtime.store.load("a", "s").model_version, 2)
+            reset_state = runtime.store.load("a", "s")
+            assert reset_state is not None
+            self.assertEqual(reset_state.model_version, 2)
 
     def test_migration_proposal_reports_lossy_controls(self):
         proposal = migration_proposal(
@@ -507,6 +516,7 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                 known_participants=["bot:A", "bot:B", "bot:C"],
             )
             state = runtime.store.load("bot:A", "s")
+            assert state is not None
             self.assertEqual(state.offended, 0)
             self.assertEqual(state.social_edges[0]["target_id"], "bot:C")
             self.assertGreater(state.atmosphere_tension, 0)
@@ -532,12 +542,16 @@ class SnapshotAndMigrationTests(unittest.TestCase):
                     user_message="idiot",
                     turn_id=str(i),
                 )
-            self.assertIn("b", runtime.store.load("a", "s").open_conflicts)
+            heated_state = runtime.store.load("a", "s")
+            assert heated_state is not None
+            self.assertIn("b", heated_state.open_conflicts)
             now += timedelta(hours=100)
             runtime.pre_llm_call(
                 profile_id="a", session_id="s", sender_id="b", user_message="hello", turn_id="later"
             )
-            self.assertEqual(runtime.store.load("a", "s").open_conflicts, {})
+            cooled_state = runtime.store.load("a", "s")
+            assert cooled_state is not None
+            self.assertEqual(cooled_state.open_conflicts, {})
 
 
 if __name__ == "__main__":

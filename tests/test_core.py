@@ -410,6 +410,7 @@ class StorageTests(unittest.TestCase):
             store.save(state)
             loaded = store.load("bot/a", "session:1")
             self.assertIsNotNone(loaded)
+            assert loaded is not None
             self.assertEqual(loaded.profile_id, "bot/a")
             self.assertIsNone(store.load("bot/a", "session:2"))
             self.assertTrue(store.state_path("bot/a", "session:1").exists())
@@ -426,6 +427,7 @@ class StorageTests(unittest.TestCase):
             restarted_process = StateStore(Path(temporary))
             resumed = restarted_process.load("bot/a", "session:1")
             self.assertIsNotNone(resumed)
+            assert resumed is not None
             self.assertEqual(resumed.revision, 4)
             self.assertEqual(resumed.frustration, 0.6)
             self.assertEqual(resumed.last_turn_id, "turn:4")
@@ -448,9 +450,15 @@ class StorageTests(unittest.TestCase):
                 store.state_path("bot/b", "session:1"),
             }
             self.assertEqual(len(paths), 3)
-            self.assertEqual(store.load("bot/a", "session:1").frustration, 0.1)
-            self.assertEqual(store.load("bot/a", "session:2").frustration, 0.2)
-            self.assertEqual(store.load("bot/b", "session:1").frustration, 0.3)
+            loaded_a_session_1 = store.load("bot/a", "session:1")
+            loaded_a_session_2 = store.load("bot/a", "session:2")
+            loaded_b_session_1 = store.load("bot/b", "session:1")
+            assert loaded_a_session_1 is not None
+            assert loaded_a_session_2 is not None
+            assert loaded_b_session_1 is not None
+            self.assertEqual(loaded_a_session_1.frustration, 0.1)
+            self.assertEqual(loaded_a_session_2.frustration, 0.2)
+            self.assertEqual(loaded_b_session_1.frustration, 0.3)
 
     def test_future_state_schema_version_is_rejected(self) -> None:
         raw = AffectState.initial("bot/a", "session:1").to_dict()

@@ -555,6 +555,7 @@ class PluginAdapterTests(unittest.TestCase):
             after_calm = AffectState.from_dict(json.loads(state_path.read_text(encoding="utf-8")))
 
             self.assertIsNotNone(injected)
+            assert injected is not None
             self.assertIn("Internal affective guidance", injected["context"])
             self.assertIn("user:1", before_calm.relationships)
             self.assertLess(after_calm.frustration, before_calm.frustration)
@@ -576,6 +577,7 @@ class PluginAdapterTests(unittest.TestCase):
             result = context.emit("pre_llm_call", **kwargs)
 
             self.assertIsNotNone(result)
+            assert result is not None
             guidance = result["context"]
             self.assertIn("Internal affective guidance", guidance)
             self.assertNotIn("private phrase that must not be echoed", guidance)
