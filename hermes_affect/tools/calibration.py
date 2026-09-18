@@ -60,7 +60,7 @@ def scenario_turns(name: str) -> list[dict[str, Any]]:
         "disagreement": ["i disagree"] * 8,
         "cooling": ["you are useless"] * 5 + ["hello"],
     }[name]
-    turns = [
+    turns: list[dict[str, Any]] = [
         {"user_message": text, "sender_id": "bot:B", "target_id": "bot:A", "sender_kind": "bot"}
         for text in messages
     ]
