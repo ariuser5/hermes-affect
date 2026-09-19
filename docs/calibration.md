@@ -80,6 +80,124 @@ labels and the generated internal guidance.
 | Avoiding tense discussions | high reactivity, low assertiveness |
 | Mediating observed conflict | high receptiveness + assertiveness |
 
+## Practical behavior cookbook
+
+The previous section describes each parameter separately. For calibration, it
+is more useful to start with the behavior you want and change one or two main
+traits. The values below are starting points, not guarantees:
+
+| Desired behavior | Suggested starting values |
+|---|---|
+| Calm and difficult to destabilize | `reactivity` 0.2–0.4, `pride` 0.2–0.5, `persistence` 0.2–0.5 |
+| Sensitive and easily hurt | `reactivity` 0.7–0.9, `pride` 0.7–0.9, `playfulness` 0.1–0.4 |
+| Holds onto anger or tension for a long time | `persistence` 0.75–0.95 |
+| Playful and friendly | `playfulness` 0.75–0.95, `receptiveness` 0.6–0.9 |
+| Playfully provocative or mischievous | `playfulness` 0.8–1.0, `assertiveness` 0.7–0.95, `receptiveness` 0.1–0.35 |
+| Defends itself and confronts others | `assertiveness` 0.7–0.95, with medium or high `reactivity` and `pride` |
+| Avoids conflict or withdraws | `assertiveness` 0.1–0.35; add high `reactivity` for a more sensitive withdrawal |
+| Mediates other people's conflicts | `receptiveness` 0.8–1.0, `assertiveness` 0.7–0.9, `reactivity` 0.2–0.5 |
+| Easily accepts apologies and repair attempts | `receptiveness` 0.75–0.95 |
+| Difficult to reconcile | `pride` 0.7–0.9, `persistence` 0.7–0.95, `receptiveness` 0.15–0.4 |
+| Expresses its feelings more visibly | `expression_gain` 1.5–3.0 |
+| Discreet and not very demonstrative | `expression_gain` 0.2–0.7 |
+
+### Example profiles
+
+A friendly, playful bot could start with:
+
+```yaml
+traits:
+  reactivity: 0.35
+  persistence: 0.35
+  pride: 0.30
+  playfulness: 0.85
+  assertiveness: 0.55
+  receptiveness: 0.75
+tuning:
+  expression_gain: 1.2
+```
+
+A sensitive, defensive bot could start with:
+
+```yaml
+traits:
+  reactivity: 0.85
+  persistence: 0.80
+  pride: 0.85
+  playfulness: 0.20
+  assertiveness: 0.30
+  receptiveness: 0.35
+tuning:
+  expression_gain: 1.0
+```
+
+A mediation-oriented bot could start with:
+
+```yaml
+traits:
+  reactivity: 0.30
+  persistence: 0.45
+  pride: 0.30
+  playfulness: 0.40
+  assertiveness: 0.85
+  receptiveness: 0.95
+tuning:
+  expression_gain: 0.8
+```
+
+### How to interpret combinations
+
+- High `playfulness` does not automatically mean sarcasm. It makes jokes and
+  playful interpretations more likely.
+- High `playfulness` + `assertiveness` with low `receptiveness` more readily
+  produces provocation or persistent teasing.
+- High `reactivity` + `pride` with low `playfulness` produces sensitivity to
+  teasing or challenges involving competence and status.
+- High `receptiveness` + `assertiveness` favors mediation: the bot is willing
+  to consider the other person's perspective and also willing to intervene.
+- `persistence` controls how long an event's effect remains in state; it is not
+  a memory of facts or transcript content.
+- `expression_gain` changes how visibly the effect appears in the reply. It
+  does not directly change the internal reaction; if the state is appropriate
+  but the reply is too subtle, increase this parameter first.
+
+For sensitivity to a particular topic, add an explicit sensitivity, for
+example:
+
+```yaml
+sensitivities:
+  - topic: competence
+    intensity: 0.70
+```
+
+This amplifies reactions to literal topic matches when the message is addressed
+to the bot; it does not create general interest in or aversion to that topic.
+
+### Recommended calibration procedure
+
+1. Choose a scenario close to the behavior you want: `banter` for jokes,
+   `group` for conflicts between participants, `repair` for apologies and
+   reconciliation, or `cooling` for recovery over time.
+2. Change one parameter by approximately `0.2` and run the scenario again.
+3. Compare results with `--compare` or `--sweep`:
+
+```bash
+python -m hermes_affect.tools.calibration --scenario banter --sweep playfulness --json
+python -m hermes_affect.tools.calibration --scenario group --preset mediator --json
+python -m hermes_affect.tools.calibration --scenario repair --sweep receptiveness --json
+```
+
+4. Check `posture`, `expression tier`, tension, offense/frustration and the
+   generated guidance.
+5. Once the tendency is correct, adjust `expression_gain` for how strongly you
+   want it expressed.
+
+Offline scenarios show plugin guidance; they do not guarantee the exact wording
+of the final model-generated reply. Live results also depend on session history,
+the relationship with the participant and the messages the bot has observed. If
+a behavior is not represented by the model, such as “always be sarcastic” or
+“never take offense”, trait calibration alone cannot guarantee it.
+
 These are tendencies and opportunities, not guarantees. High mischief selects
 teasing guidance on humorous or disagreeing turns; it does not make every reply
 a provocation. A compatible playful receiver interprets the same teasing more
