@@ -16,6 +16,12 @@ a Hermes registration adapter, examples, and unit tests. Semantic
 classification is disabled by default and uses the active Hermes provider only
 when explicitly enabled.
 
+An optional read-only affect dashboard is also implemented under
+[`dashboard/`](dashboard/README.md). It uses Hermes' authenticated dashboard
+extension surface, shares the existing dashboard port, and remains disabled
+unless `HERMES_AFFECT_DASHBOARD=1` is explicitly supplied to the dashboard
+process.
+
 The plugin is intentionally developed against Hermes' documented public
 general-plugin API rather than a single pinned runtime image. Newest Hermes
 versions have priority; older versions remain candidates when they preserve
@@ -70,5 +76,6 @@ directory with the plugin setting `state_dir` or the
 See [`docs/architecture.md`](docs/architecture.md),
 [`docs/hermes-compatibility.md`](docs/hermes-compatibility.md),
 [`docs/installation.md`](docs/installation.md),
-[`docs/privacy-and-retention.md`](docs/privacy-and-retention.md), and
+[`docs/privacy-and-retention.md`](docs/privacy-and-retention.md),
+[`dashboard/README.md`](dashboard/README.md), and
 [`examples/soul/basic.md`](examples/soul/basic.md).

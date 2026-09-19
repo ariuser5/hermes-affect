@@ -1,26 +1,30 @@
 # Dashboard frontend source
 
-Editable browser source will live under `frontend/src/` and produce the single
-IIFE bundle required by Hermes at `../dist/index.js`. Generated output must not
-be edited in place.
-
-The source will mirror the main plugin's separation of concerns:
+Editable browser source lives under `frontend/src/` and produces the IIFE
+bundle required by Hermes at `../dist/index.js`. Generated output is committed
+for deployment but must not be edited in place.
 
 ```text
 frontend/src/
-├── application/      # polling, cancellation, and page state transitions
-├── domain/           # response validation, display scales, and labels
+├── application/      # non-overlapping polling, cancellation, stale state
+├── domain/           # response normalization, bounds, scales, labels
 ├── infrastructure/   # authenticated Hermes dashboard API client
 ├── presentation/     # SDK components and theme-aware rendering
-└── index.js          # thin Hermes dashboard registration boundary
+└── index.js           # thin conditional registration boundary
 ```
 
-Use the React instance and components supplied by
-`window.__HERMES_PLUGIN_SDK__`; do not bundle React. Avoid JSX unless the chosen
-deterministic build step clearly improves maintainability. The final bundle
-must remain inspectable, small, and compatible with the pinned Hermes image.
+The source uses the React instance and components supplied by
+`window.__HERMES_PLUGIN_SDK__`; it does not bundle React or use unsafe HTML.
+The initial API request acts as a preflight: a disabled `404` or another
+failure leaves the Affect tab unregistered. Once mounted, the page polls every
+five seconds, cancels its timer on unmount, and retains the last valid snapshot
+with a stale warning after a refresh failure.
 
-Do not create `src/`, `dist/`, a package manifest, or a build tool until the
-first implementation phase selects and documents the build approach in
-[`../PLAN.md`](../PLAN.md).
+The deterministic build has no Node package dependencies:
 
+```bash
+python -m dashboard.tools.build_dashboard
+python -m dashboard.tools.build_dashboard --check
+node frontend/tests/domain.test.js
+node --check dist/index.js
+```

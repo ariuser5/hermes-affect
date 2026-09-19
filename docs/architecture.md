@@ -44,6 +44,8 @@ presets, formula responsibilities and migration, see [calibration.md](calibratio
 - tools/calibration.py replays synthetic scenarios through the same runtime,
   using temporary storage and a fixed clock, and proposes read-only v1
   migration.
+- application/inspection.py builds the bounded current-state projection shared
+  by `/affect state` and the optional authenticated extension in `dashboard/`.
 
 No private Hermes imports, live peer-state reads, mutable shared room files or
 automatic LLM configuration extraction are required.
@@ -224,6 +226,14 @@ Injected guidance contains no numeric state or raw transcript. The public
 pre_llm_call hook may retain guidance in API-bound conversation history;
 there is no request-only privacy guarantee. See
 [privacy-and-retention.md](privacy-and-retention.md).
+
+The optional dashboard reuses this same current-state projection. Its thin
+FastAPI adapter reads the newest valid state available to one Hermes container,
+and its browser page polls through Hermes' authenticated plugin route. The
+feature is independently gated by `HERMES_AFFECT_DASHBOARD`, defaults off,
+adds no listener or Docker port, and exposes no mutation routes. Cross-container
+aggregation and historical charts remain outside this design. See
+[`../dashboard/README.md`](../dashboard/README.md).
 
 ## Deferred interests and conversational effort
 

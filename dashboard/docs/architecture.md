@@ -67,7 +67,20 @@ The planned first endpoint is:
 GET /api/plugins/hermes-affect/state
 ```
 
-The response will use the same projection as `/affect state` and include:
+The response wraps the same projection as `/affect state`:
+
+```json
+{
+  "available": true,
+  "state": {
+    "profile_id": "bot-id",
+    "session_id": "session-id"
+  }
+}
+```
+
+When no valid state exists, the endpoint returns
+`{"available": false, "state": null}` with HTTP 200. A present state includes:
 
 - profile and session identity;
 - revision and update timestamp;
@@ -95,8 +108,7 @@ bounded, transcript-free history projection.
 
 - Feature disabled: backend returns `404`; the bundle does not register a tab.
 - No state: page shows an empty-state explanation.
-- Malformed or unsupported state: backend returns a bounded error without file
-  contents.
+- Malformed or unsupported state files are skipped while selecting the latest
+  valid state; if none remain, the page receives the normal empty response.
 - Stale state: page remains readable and labels the update age.
 - Frontend or plugin failure: Hermes' other dashboard pages remain functional.
-

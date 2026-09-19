@@ -7,12 +7,11 @@ import logging
 import math
 import os
 from collections.abc import Callable, Mapping
-from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from ..domain.configuration import TUNING_FIELDS, AffectConfig, neutral_config, validate_config
+from ..domain.configuration import AffectConfig, neutral_config
 from ..domain.dynamics import apply_event, decay_state
 from ..domain.events import EventType
 from ..domain.posture import derive_posture
@@ -28,6 +27,7 @@ from .classification.semantic.classifier import (
 )
 from .classification.targeting import route_events
 from .commands import AffectCommandHandler
+from .inspection import resolve_state_config
 from .response.rendering import derive_mood, render_context
 
 logger = logging.getLogger("hermes-affect")
@@ -352,17 +352,10 @@ class AffectRuntime:
         return sender_id in {str(item) for item in configured} and bool(sender_id)
 
     def _config_for_state(self, state: AffectState) -> AffectConfig | None:
-        config, warnings = validate_config(state.predisposition)
+        config, warnings = resolve_state_config(state)
         for warning in warnings:
             logger.warning("Saved affect configuration: %s", warning)
-        if state.model_version != 2 or config.schema_version != 2:
-            logger.warning("Legacy affect session requires explicit migration/reset; preserved")
-            return None
-        tuning = dict(config.tuning)
-        tuning.update(
-            {key: value for key, value in state.tuning_overrides.items() if key in TUNING_FIELDS}
-        )
-        return replace(config, tuning=tuning)
+        return config
 
     @staticmethod
     def _string_values(value: Any) -> list[str]:

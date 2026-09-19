@@ -34,6 +34,22 @@ requires a separate adapter branch or fixture. If a future Hermes release
 documents a changed registration or callback contract, add a focused versioned
 fixture at that public boundary before adding compatibility logic.
 
+The optional affect dashboard follows Hermes' separately documented dashboard
+extension contract. Source review against release `v2026.9.7` confirms a
+`dashboard/manifest.json`, pre-built IIFE/CSS assets, and a
+`dashboard/plugin_api.py` FastAPI router mounted below
+`/api/plugins/<plugin-name>/`. Hermes applies its normal dashboard
+authentication and plugin-enabled gate to that route. The adapter contains a
+scoped import-path bootstrap because the pinned loader imports `plugin_api.py`
+by file location rather than adding the plugin checkout to `sys.path`.
+
+Canonical pinned references are the
+[dashboard extension guide](https://github.com/NousResearch/hermes-agent/blob/v2026.9.7/website/docs/user-guide/features/extending-the-dashboard.md),
+[dashboard plugin loader](https://github.com/NousResearch/hermes-agent/blob/v2026.9.7/hermes_cli/web_server_dashboard.py),
+and [dashboard route gate](https://github.com/NousResearch/hermes-agent/blob/v2026.9.7/hermes_cli/web_server.py).
+This is source-contract validation, not a successful packaged-image smoke test;
+the latter remains required before deployment.
+
 ## Documented public surface
 
 The plugin uses only the public registration methods represented by the fake

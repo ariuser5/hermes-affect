@@ -116,6 +116,37 @@ mount when ownership and backup boundaries are clear; otherwise use a separate
 Docker volume. Do not use `tmpfs` for production state because it is lost on
 container restart.
 
+## Optional affect dashboard
+
+The plugin checkout includes a native Hermes dashboard extension. It is
+independently disabled by default; enabling affect processing does not expose
+the web view. A deployment must enable Hermes' normal dashboard, keep
+`hermes-affect` in `plugins.enabled`, and provide this environment value to the
+dashboard process:
+
+```yaml
+HERMES_AFFECT_DASHBOARD: "1"
+```
+
+The extension uses the existing authenticated dashboard listener and port. Do
+not add a sidecar, new host port, or broader state mount. It reads the same
+`HERMES_AFFECT_STATE_DIR` as the plugin, falling back to
+`<HERMES_HOME>/affect-state`, and never writes state.
+
+Rebuild and check committed browser assets before installing a source change:
+
+```bash
+python -m dashboard.tools.build_dashboard
+python -m dashboard.tools.build_dashboard --check
+```
+
+Set the flag to `0` and restart or recreate the dashboard process to remove the
+route and tab without disabling affect processing or deleting state. Detailed
+validation and rollback guidance is in
+[`../dashboard/docs/deployment.md`](../dashboard/docs/deployment.md). Actual
+Compose or live deployment changes remain a separate, explicitly authorized
+operation.
+
 ## Pinning and rollback
 
 Install the plugin from a full immutable Git commit SHA, not from `main`, a

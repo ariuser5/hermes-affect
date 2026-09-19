@@ -1,0 +1,15 @@
+{
+  "name": "hermes-affect",
+  "label": "Affect",
+  "description": "Current session-scoped affect state and relationships",
+  "icon": "Heart",
+  "version": "0.1.0",
+  "tab": {
+    "path": "/affect",
+    "position": "after:analytics"
+  },
+  "entry": "dist/index.js",
+  "css": "dist/style.css",
+  "api": "plugin_api.py"
+}
+

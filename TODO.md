@@ -41,6 +41,40 @@ influence designs; old checkmarks do not assert those old interfaces remain.
       implementing this feature. No topic-interest or clarification-frustration behavior is
       implemented by the current refactor.
 
+## Optional authenticated affect dashboard — started 2026-09-19
+
+- [x] Isolate the feature under `dashboard/` with its own durable plan and
+      documentation.
+- [x] Extract one bounded safe-state projection shared with `/affect state`.
+- [x] Add a strict, default-off `HERMES_AFFECT_DASHBOARD` gate.
+- [x] Add a read-only native Hermes dashboard route for the latest valid state
+      visible inside one container.
+- [x] Add a conditional Affect tab, responsive current-state visualization,
+      five-second non-overlapping polling, and empty/stale behavior.
+- [x] Add a deterministic dependency-free browser build and commit-ready
+      generated IIFE/CSS assets.
+- [x] Add backend, projection, feature-gate, manifest, asset, and frontend
+      normalization tests; pass the complete 137-test repository suite.
+- [x] Validate the implementation contract against pinned Hermes `v2026.9.7`
+      source and document the adapter path bootstrap.
+- [x] Run Ruff.
+- [ ] Smoke-test the packaged extension in the pinned Hermes image.
+- [ ] Measure polling cost on the target Pi and adjust only if evidence requires
+      it.
+- [ ] Propose and review the separate Docker/Compose feature flag change; do
+      not modify or deploy infrastructure without explicit authorization.
+
+Acceptance criteria:
+
+- Affect processing remains independent from web enablement.
+- Disabled or invalid feature-gate values disclose no state and register no
+  dashboard tab.
+- The route remains behind Hermes' dashboard authentication and publishes no
+  extra port or mutation method.
+- One container exposes only its latest valid local state; cross-container
+  aggregation and historical charts remain deferred.
+- Exact continuation status is maintained in `dashboard/PLAN.md`.
+
 ## Phase 0 — repository and CI baseline
 
 - [x] Create the standalone plugin scaffold.
@@ -337,7 +371,7 @@ Deployment gate:
 - Automatic semantic classification is disabled by default and is not required
   for deterministic-only deployments.
 - Automatic SOUL calibration without human review.
-- Visualization and history tools.
+- Historical visualization and cross-container aggregation tools.
 
 ## Future roadmap
 

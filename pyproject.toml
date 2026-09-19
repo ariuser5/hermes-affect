@@ -25,7 +25,7 @@ hermes-affect = "hermes_affect.plugin:register"
 include = ["hermes_affect*"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "dashboard/tests"]
 pythonpath = ["."]
 
 [tool.ruff]

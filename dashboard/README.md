@@ -1,63 +1,89 @@
 # Hermes Affect dashboard
 
-This directory is the self-contained feature area for the optional Hermes
-Affect web dashboard. It will contain the dashboard backend, browser source,
-generated dashboard assets, feature-specific tests, and documentation.
+This directory contains the optional, read-only Hermes Affect web dashboard.
+It follows the same application/domain/infrastructure layering as the main
+plugin and uses Hermes' native dashboard-extension surface rather than running
+another web server.
 
-The dashboard is not implemented or activated yet. In particular, there is no
-`manifest.json` or `plugin_api.py`, so Hermes will not discover a partial
-dashboard extension.
+The feature is implemented but disabled by default. Hermes discovers
+`manifest.json`, serves the pre-built files in `dist/`, and mounts
+`plugin_api.py` below `/api/plugins/hermes-affect/`. The Affect tab registers
+only when an initial authenticated request succeeds.
 
-## Intended integration
+## Enablement boundary
 
-The feature will use Hermes' native dashboard-extension contract rather than
-starting another HTTP server. When enabled, Hermes will mount the read-only
-backend below `/api/plugins/hermes-affect/` and load a dedicated Affect tab
-through the existing authenticated dashboard on port 9119.
+Both controls must be enabled:
 
-The initial release is deliberately limited to the latest state visible inside
-one Hermes container. The current deployment gives every bot container its own
-data root, so a combined cross-container view is a separate future feature.
+1. Hermes' dashboard and the `hermes-affect` plugin are enabled normally.
+2. The Hermes dashboard process receives `HERMES_AFFECT_DASHBOARD=1`.
 
-## Feature boundary
+Only `1`, `true`, `yes`, and `on` enable the feature, case-insensitively.
+Missing and documented false values disable it. Invalid values fail closed and
+emit an administrative warning. While disabled, `GET /state` returns `404` and
+the browser does not add an Affect tab.
 
-- The dashboard is opt-in through `HERMES_AFFECT_DASHBOARD=1`.
-- Hermes' own dashboard must also be enabled.
-- The first version exposes current state only and has no mutating routes.
-- It reuses the safe state projection used by `/affect state`; it does not
-  invent a second affect model.
-- It does not expose raw messages, audit records, observed-participant history,
-  SOUL contents or hashes, classifier material, or credentials.
-- It shares the existing dashboard port and authentication gate. It does not
-  create or publish another Docker port.
+The endpoint uses the existing Hermes dashboard authentication and port. It
+does not open another listener, publish another Docker port, or write affect
+state.
 
-## Layout
+## What the page shows
+
+The page polls the latest valid state visible in the current container every
+five seconds. It shows mood, posture, freshness, expression drive, perceived
+atmosphere, affect values, relationships, active sensitivities, open conflicts,
+and temporary tuning overrides.
+
+The response reuses the safe projection used by `/affect state`. It excludes
+raw messages, audit records, observed-participant history, SOUL contents and
+hashes, predisposition data, provider material, credentials, and filesystem
+details. See [`docs/privacy-and-security.md`](docs/privacy-and-security.md).
+
+## Layout and build
 
 ```text
 dashboard/
-├── README.md
-├── PLAN.md
-├── docs/
-│   ├── architecture.md
-│   ├── deployment.md
-│   └── privacy-and-security.md
+├── manifest.json
+├── plugin_api.py
+├── dist/                         # committed, generated Hermes assets
 ├── hermes_affect_dashboard/
 │   ├── application/
 │   ├── domain/
 │   └── infrastructure/
-└── frontend/
-    └── README.md
+├── frontend/
+│   ├── src/                      # editable browser source
+│   └── tests/
+├── tests/
+├── tools/build_dashboard.py
+├── docs/
+└── PLAN.md
 ```
 
-The Python package mirrors the main plugin's `application`, `domain`, and
-`infrastructure` boundaries. The future root-level `plugin_api.py` will remain
-a thin Hermes adapter, just as the main plugin keeps its Hermes registration
-adapter thin. Browser code will follow the equivalent boundaries described in
-[`frontend/README.md`](frontend/README.md).
+Rebuild and verify the browser assets with:
 
-## Resuming work
+```bash
+python -m dashboard.tools.build_dashboard
+python -m dashboard.tools.build_dashboard --check
+node dashboard/frontend/tests/domain.test.js
+node --check dashboard/dist/index.js
+```
 
-Start with [`PLAN.md`](PLAN.md). It records the current checkpoint, decisions,
-implementation sequence, acceptance criteria, and unresolved questions for a
-new session.
+Run the feature tests with:
 
+```bash
+python -m unittest discover -s dashboard/tests -t .
+```
+
+The build is dependency-free: it concatenates the ordered browser modules into
+one inspectable IIFE and copies the reviewed CSS. React and common UI components
+come from Hermes' dashboard SDK at runtime.
+
+## Deployment scope
+
+The first release deliberately selects the latest state inside one Hermes
+container. Deployments that isolate each bot in its own container therefore
+get one bot per dashboard. Cross-container aggregation, history charts,
+WebSockets, and mutation controls remain deferred.
+
+No deployment repository, running Hermes configuration, or Raspberry Pi state
+is changed by this feature directory. See [`docs/deployment.md`](docs/deployment.md)
+for the reviewed handoff and [`PLAN.md`](PLAN.md) for the exact checkpoint.

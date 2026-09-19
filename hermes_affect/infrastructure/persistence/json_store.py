@@ -88,9 +88,19 @@ class StateStore:
         if not sessions_root.is_dir():
             return None
 
+        return self._latest_from_paths(sessions_root.glob("*.json"))
+
+    def latest(self) -> AffectState | None:
+        """Load the most recently updated valid session across profiles."""
+
+        if not self.root.is_dir():
+            return None
+        return self._latest_from_paths(self.root.glob("*/sessions/*.json"))
+
+    def _latest_from_paths(self, paths: Iterator[Path]) -> AffectState | None:
         latest: AffectState | None = None
         latest_updated_at: datetime | None = None
-        for path in sessions_root.glob("*.json"):
+        for path in sorted(paths):
             try:
                 state = self._load_path(path)
                 updated_at = self._updated_at(state)

@@ -14,6 +14,7 @@ from ..domain.calculations import (
 )
 from ..domain.configuration import TUNING_FIELDS
 from ..domain.state import AffectState, utc_now
+from .inspection import state_snapshot
 
 
 class AffectCommandHandler:
@@ -123,37 +124,7 @@ class AffectCommandHandler:
             return f"No affect state found for profile={profile_id}."
 
         config = self.runtime._config_for_state(state)
-        payload = {
-            "profile_id": state.profile_id,
-            "session_id": state.session_id,
-            "revision": state.revision,
-            "updated_at": state.updated_at,
-            "mood": state.mood,
-            "response_posture": state.response_posture,
-            "model_version": state.model_version,
-            "migration_required": config is None,
-            "expression_drive": effective_expression_drive(state, config) if config else None,
-            "perceived_atmosphere_tension": state.atmosphere_tension,
-            "affect": {
-                "valence": state.valence,
-                "arousal": state.arousal,
-                "frustration": state.frustration,
-                "offended": state.offended,
-            },
-            "relationships": {
-                participant_id: {
-                    "trust": relation.trust,
-                    "affinity": relation.affinity,
-                    "irritation": relation.irritation,
-                    "respect": relation.respect,
-                    "unresolved_tension": relation.unresolved_tension,
-                }
-                for participant_id, relation in state.relationships.items()
-            },
-            "active_sensitivities": list(state.active_sensitivities),
-            "open_conflicts": dict(state.open_conflicts),
-            "tuning_overrides": dict(state.tuning_overrides),
-        }
+        payload = state_snapshot(state, config)
         return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True)
 
     @staticmethod

@@ -1,12 +1,12 @@
 # Dashboard deployment
 
-## Planned Docker integration
+## Docker integration
 
 The feature will run inside Hermes' existing dashboard process and use its
 published port. It must not add a service, sidecar, health check, bind mount, or
 host port for the first release.
 
-The planned opt-in environment setting is:
+The opt-in environment setting is:
 
 ```yaml
 HERMES_AFFECT_DASHBOARD: "${HERMES_AFFECT_DASHBOARD:-0}"
@@ -30,10 +30,10 @@ Hermes discovers a dashboard extension below the installed plugin checkout:
 <hermes-home>/plugins/hermes-affect/dashboard/
 ```
 
-The source repository will eventually contain `manifest.json`,
-`plugin_api.py`, and the pre-built `dist/` assets in this directory. Editable
-browser source remains under `frontend/src/`; generated assets are rebuilt and
-reviewed before a release.
+The source repository contains `manifest.json`, `plugin_api.py`, and the
+pre-built `dist/` assets in this directory. Editable browser source remains
+under `frontend/src/`; generated assets are rebuilt and reviewed before a
+release with `python -m dashboard.tools.build_dashboard`.
 
 ## Enable and disable behavior
 
@@ -67,4 +67,3 @@ Set `HERMES_AFFECT_DASHBOARD=0` and recreate or restart the affected container.
 If the entire plugin revision is rolled back, follow the main plugin rollback
 procedure while preserving the affect state directory. Dashboard rollback must
 not delete state.
-

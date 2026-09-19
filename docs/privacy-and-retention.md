@@ -78,6 +78,24 @@ history. The state model does not contain raw messages or classifier prompts.
 Disable or remove this public diagnostic before exposing the command to
 untrusted users.
 
+## Optional authenticated dashboard
+
+`HERMES_AFFECT_DASHBOARD` is a separate default-off disclosure boundary. When
+enabled, the native Hermes dashboard extension serves the same bounded
+current-state projection behind Hermes' existing dashboard authentication. It
+adds no public listener and no mutation route. The projection includes profile
+and session identifiers, numerical affect, relationships, sensitivities,
+conflicts, and tuning, so dashboard credentials must be treated as access to
+private interpersonal state.
+
+The response excludes raw messages, audits, directed social observations,
+expressed-distress estimates, SOUL content and hashes, saved predisposition,
+classifier material, credentials, paths, and stack traces. The frontend uses
+text rendering rather than HTML interpolation. Disabling the flag returns
+`404` and prevents tab registration while leaving affect processing and state
+retention unchanged. See
+[`../dashboard/docs/privacy-and-security.md`](../dashboard/docs/privacy-and-security.md).
+
 Any future public temperament signature must be opt-in and limited to coarse,
 reviewed categories such as playfulness and assertiveness. It
 must never publish private affect, relationship history, observed participant
