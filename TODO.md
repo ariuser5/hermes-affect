@@ -66,7 +66,10 @@ influence designs; old checkmarks do not assert those old interfaces remain.
 - [x] Plan retained-session navigation with exact selection, bounded catalog
       pagination, responsive UI, privacy constraints, tests, and clean-code
       boundaries in `dashboard/SESSION_NAVIGATION_PLAN.md`.
-- [ ] Implement retained-session navigation phase-by-phase from that plan.
+- [ ] Implement retained-session navigation phase-by-phase from that plan;
+      local backend, controller, presentation, asset, test, and documentation
+      phases are complete, while live Hermes visual and packaged-extension
+      checks remain.
 
 Acceptance criteria:
 

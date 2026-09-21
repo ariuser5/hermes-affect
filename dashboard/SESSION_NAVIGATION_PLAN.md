@@ -1,8 +1,9 @@
 # Affect dashboard session-navigation plan
 
-This is the implementation handoff for adding session selection to the
-existing Hermes Affect dashboard. It is a plan only: no endpoint, storage, or
-frontend behavior described here is implemented at this checkpoint.
+This is the implementation handoff and progress record for adding session
+selection to the existing Hermes Affect dashboard. Completed checkboxes record
+behavior that is implemented and locally verified; remaining deployment and
+visual checks stay explicit.
 
 Plan date: 2026-09-21.
 
@@ -266,37 +267,37 @@ behavior changes were made.
 
 ### Phase 2 — dashboard backend
 
-- [ ] Add catalog and exact-selection application services.
-- [ ] Add `GET /sessions` with bounded pagination.
-- [ ] Extend `GET /state` with paired optional identifiers.
-- [ ] Cover disabled mode, partial identifiers, invalid bounds, exact hit,
+- [x] Add catalog and exact-selection application services.
+- [x] Add `GET /sessions` with bounded pagination.
+- [x] Extend `GET /state` with paired optional identifiers.
+- [x] Cover disabled mode, partial identifiers, invalid bounds, exact hit,
       exact miss, garbage-collected state, malformed files, and sanitized-name
       collision behavior.
-- [ ] Confirm all responses retain the existing privacy exclusions.
+- [x] Confirm all responses retain the existing privacy exclusions.
 
-Checkpoint: focused backend tests pass; the existing no-query endpoint remains
-backward-compatible.
+Checkpoint: focused and repository-wide backend tests pass; the existing
+no-query endpoint remains backward-compatible.
 
 ### Phase 3 — frontend domain and controller
 
-- [ ] Add catalog/selection normalizers and query construction.
-- [ ] Add explicit latest/exact selection state.
-- [ ] Add race-safe exact-session polling.
-- [ ] Add catalog pagination, refresh, loading, and error state without coupling
+- [x] Add catalog/selection normalizers and query construction.
+- [x] Add explicit latest/exact selection state.
+- [x] Add race-safe exact-session polling.
+- [x] Add catalog pagination, refresh, loading, and error state without coupling
       it to the displayed snapshot.
-- [ ] Test pure state transitions and stale-response rejection with Node's
+- [x] Test pure state transitions and stale-response rejection with Node's
       standard test/assertion facilities.
 
 Checkpoint: controller behavior is testable without rendering React.
 
 ### Phase 4 — navigation presentation
 
-- [ ] Split reusable presentation primitives and the state view out of the
+- [x] Split reusable presentation primitives and the state view out of the
       current `page.js` before adding navigation.
-- [ ] Implement the responsive session navigator and active-selection states.
-- [ ] Add explicit exact-session loading, unavailable, and return-to-latest
+- [x] Implement the responsive session navigator and active-selection states.
+- [x] Add explicit exact-session loading, unavailable, and return-to-latest
       behavior.
-- [ ] Preserve the existing visual language and narrow-screen usability.
+- [x] Preserve the existing visual language and narrow-screen usability.
 - [ ] Perform a real visual check in Hermes at desktop and narrow widths.
 
 Checkpoint: selecting several retained sessions changes only the state view and
@@ -304,12 +305,12 @@ never loses the chosen identity during polling.
 
 ### Phase 5 — build, tests, and documentation
 
-- [ ] Update deterministic bundle ordering and regenerate `dist/`.
-- [ ] Run focused backend tests, frontend domain/controller tests, JavaScript
+- [x] Update deterministic bundle ordering and regenerate `dist/`.
+- [x] Run focused backend tests, frontend domain/controller tests, JavaScript
       syntax validation, generated-asset checks, Ruff, and the full repository
       suite.
-- [ ] Update dashboard README, architecture, privacy, and deployment notes.
-- [ ] Update `dashboard/PLAN.md` and the root `TODO.md` with the achieved
+- [x] Update dashboard README, architecture, privacy, and deployment notes.
+- [x] Update `dashboard/PLAN.md` and the root `TODO.md` with the achieved
       checkpoint.
 - [ ] Smoke-test the packaged plugin with the existing dashboard feature gate;
       do not modify live deployment configuration without explicit approval.

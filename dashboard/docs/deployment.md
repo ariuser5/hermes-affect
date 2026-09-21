@@ -55,7 +55,9 @@ unchanged.
 5. Confirm unauthenticated requests are rejected by Hermes.
 6. Confirm the existing dashboard port is the only published web port.
 7. Confirm the endpoint cannot mutate state and exposes no excluded fields.
-8. Only after explicit authorization, propose and validate the infrastructure
+8. Confirm the retained-session catalog is bounded and exact selection cannot
+   cross a sanitized profile/session path collision.
+9. Only after explicit authorization, propose and validate the infrastructure
    repository setting on the real deployment.
 
 No Raspberry Pi, SSH, live Compose, or deployment command is authorized by

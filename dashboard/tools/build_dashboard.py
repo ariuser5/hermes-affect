@@ -12,6 +12,9 @@ SOURCE_FILES = (
     SOURCE_ROOT / "domain" / "state.js",
     SOURCE_ROOT / "infrastructure" / "api.js",
     SOURCE_ROOT / "application" / "state_controller.js",
+    SOURCE_ROOT / "presentation" / "primitives.js",
+    SOURCE_ROOT / "presentation" / "state_view.js",
+    SOURCE_ROOT / "presentation" / "session_navigator.js",
     SOURCE_ROOT / "presentation" / "page.js",
     SOURCE_ROOT / "index.js",
 )

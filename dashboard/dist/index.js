@@ -11,6 +11,8 @@
 feature.domain = (function () {
   const COLLECTION_LIMIT = 64;
   const TEXT_LIMIT = 200;
+  const DEFAULT_PAGE_SIZE = 50;
+  const MAX_PAGE_SIZE = 100;
 
   function objectOrEmpty(value) {
     return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -19,6 +21,12 @@ feature.domain = (function () {
   function text(value, fallback) {
     if (value === null || value === undefined) return fallback || "";
     return String(value).slice(0, TEXT_LIMIT);
+  }
+
+  function boundedIdentifier(value) {
+    return typeof value === "string" && value.length > 0 && value.length <= TEXT_LIMIT
+      ? value
+      : null;
   }
 
   function finite(value, minimum, maximum, fallback) {
@@ -105,6 +113,104 @@ feature.domain = (function () {
     };
   }
 
+  function latestSelection() {
+    return { mode: "latest" };
+  }
+
+  function exactSelection(profileId, sessionId) {
+    const profile = boundedIdentifier(profileId);
+    const session = boundedIdentifier(sessionId);
+    if (!profile || !session) return latestSelection();
+    return { mode: "exact", profileId: profile, sessionId: session };
+  }
+
+  function sameSelection(left, right) {
+    if (!left || !right || left.mode !== right.mode) return false;
+    if (left.mode === "latest") return true;
+    return left.profileId === right.profileId && left.sessionId === right.sessionId;
+  }
+
+  function normalizeSessionSummary(raw) {
+    const summary = objectOrEmpty(raw);
+    const profileId = boundedIdentifier(summary.profile_id);
+    const sessionId = boundedIdentifier(summary.session_id);
+    if (!profileId || !sessionId) return null;
+    if (
+      typeof summary.updated_at !== "string" ||
+      summary.updated_at.length === 0 ||
+      summary.updated_at.length > TEXT_LIMIT ||
+      typeof summary.mood !== "string" ||
+      typeof summary.response_posture !== "string" ||
+      summary.mood.length > TEXT_LIMIT ||
+      summary.response_posture.length > TEXT_LIMIT
+    ) {
+      return null;
+    }
+    const revision = Number(summary.revision);
+    const modelVersion = Number(summary.model_version);
+    if (
+      !Number.isFinite(revision) ||
+      !Number.isFinite(modelVersion) ||
+      revision < 0 ||
+      modelVersion < 0
+    ) {
+      return null;
+    }
+    return {
+      profileId: profileId,
+      sessionId: sessionId,
+      updatedAt: summary.updated_at,
+      revision: Math.min(Number.MAX_SAFE_INTEGER, Math.trunc(revision)),
+      mood: summary.mood,
+      posture: summary.response_posture,
+      modelVersion: Math.min(999, Math.trunc(modelVersion)),
+    };
+  }
+
+  function normalizeCatalogResponse(raw) {
+    const response = objectOrEmpty(raw);
+    const rawLimit = Number(response.limit);
+    const rawOffset = Number(response.offset);
+    const limit =
+      Number.isInteger(rawLimit) && rawLimit >= 1 && rawLimit <= MAX_PAGE_SIZE
+        ? rawLimit
+        : DEFAULT_PAGE_SIZE;
+    const offset = Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
+    const items = Array.isArray(response.items)
+      ? response.items.map(normalizeSessionSummary).filter(Boolean).slice(0, limit)
+      : [];
+    return {
+      items: items,
+      limit: limit,
+      offset: offset,
+      hasMore: response.has_more === true,
+    };
+  }
+
+  function mergeCatalogPages(current, next) {
+    const existing = current && Array.isArray(current.items) ? current.items : [];
+    const incoming = next && Array.isArray(next.items) ? next.items : [];
+    const seen = new Set(
+      existing.map(function (item) {
+        return item.profileId + "\u0000" + item.sessionId;
+      })
+    );
+    const items = existing.slice();
+    incoming.forEach(function (item) {
+      const key = item.profileId + "\u0000" + item.sessionId;
+      if (!seen.has(key)) {
+        seen.add(key);
+        items.push(item);
+      }
+    });
+    return {
+      items: items,
+      limit: next.limit,
+      offset: next.offset,
+      hasMore: next.hasMore,
+    };
+  }
+
   function percent(value, minimum, maximum) {
     const normalized = (finite(value, minimum, maximum, minimum) - minimum) / (maximum - minimum);
     return Math.round(normalized * 1000) / 10;
@@ -124,6 +230,12 @@ feature.domain = (function () {
 
   return {
     normalizeResponse: normalizeResponse,
+    latestSelection: latestSelection,
+    exactSelection: exactSelection,
+    sameSelection: sameSelection,
+    normalizeSessionSummary: normalizeSessionSummary,
+    normalizeCatalogResponse: normalizeCatalogResponse,
+    mergeCatalogPages: mergeCatalogPages,
     percent: percent,
     formatNumber: formatNumber,
     label: label,
@@ -132,51 +244,210 @@ feature.domain = (function () {
 
 feature.infrastructure = (function () {
   const ENDPOINT = "/api/plugins/hermes-affect/state";
+  const SESSIONS_ENDPOINT = "/api/plugins/hermes-affect/sessions";
 
-  function loadState() {
-    return SDK.fetchJSON(ENDPOINT);
+  function loadState(selection) {
+    const params = new URLSearchParams();
+    if (selection && selection.mode === "exact") {
+      params.set("profile_id", selection.profileId);
+      params.set("session_id", selection.sessionId);
+    }
+    const query = params.toString();
+    return SDK.fetchJSON(query ? ENDPOINT + "?" + query : ENDPOINT);
   }
 
-  return { loadState: loadState };
+  function loadSessions(limit, offset) {
+    const params = new URLSearchParams();
+    params.set("limit", String(limit));
+    params.set("offset", String(offset));
+    return SDK.fetchJSON(SESSIONS_ENDPOINT + "?" + params.toString());
+  }
+
+  return { loadState: loadState, loadSessions: loadSessions };
 })();
 
 feature.application = (function () {
   const POLL_INTERVAL_MS = 5000;
+  const DEFAULT_PAGE_SIZE = 50;
+
+  function isCurrentRequest(generation, activeGeneration, requestSelection, selection) {
+    return (
+      generation === activeGeneration &&
+      feature.domain.sameSelection(requestSelection, selection)
+    );
+  }
+
+  function responseMatchesSelection(response, selection) {
+    if (!response || response.available !== true || !response.state) return false;
+    if (selection.mode === "latest") return true;
+    return (
+      response.state.profileId === selection.profileId &&
+      response.state.sessionId === selection.sessionId
+    );
+  }
 
   function useDashboardState(initialResponse) {
-    const statePair = SDK.hooks.useState(initialResponse);
-    const response = statePair[0];
-    const setResponse = statePair[1];
+    const responsePair = SDK.hooks.useState(initialResponse);
+    const response = responsePair[0];
+    const setResponse = responsePair[1];
+    const selectionPair = SDK.hooks.useState(feature.domain.latestSelection());
+    const selection = selectionPair[0];
+    const setSelection = selectionPair[1];
     const errorPair = SDK.hooks.useState(false);
     const hasError = errorPair[0];
     const setHasError = errorPair[1];
+    const selectedErrorPair = SDK.hooks.useState(null);
+    const selectedStateError = selectedErrorPair[0];
+    const setSelectedStateError = selectedErrorPair[1];
+    const loadingPair = SDK.hooks.useState(false);
+    const selectedStateLoading = loadingPair[0];
+    const setSelectedStateLoading = loadingPair[1];
+    const catalogPair = SDK.hooks.useState({
+      items: [],
+      limit: DEFAULT_PAGE_SIZE,
+      offset: 0,
+      hasMore: false,
+    });
+    const catalog = catalogPair[0];
+    const setCatalog = catalogPair[1];
+    const catalogLoadingPair = SDK.hooks.useState(false);
+    const catalogLoading = catalogLoadingPair[0];
+    const setCatalogLoading = catalogLoadingPair[1];
+    const catalogErrorPair = SDK.hooks.useState(null);
+    const catalogError = catalogErrorPair[0];
+    const setCatalogError = catalogErrorPair[1];
+    const stateGeneration = SDK.hooks.useRef(0);
+    const stateMounted = SDK.hooks.useRef(false);
+    const catalogGeneration = SDK.hooks.useRef(0);
+
+    SDK.hooks.useEffect(
+      function () {
+        let cancelled = false;
+        let timer = null;
+        const requestSelection = selection;
+        const generation = stateGeneration.current + 1;
+        stateGeneration.current = generation;
+
+        async function poll() {
+          setSelectedStateLoading(true);
+          try {
+            const raw = await feature.infrastructure.loadState(requestSelection);
+            if (
+              !cancelled &&
+              isCurrentRequest(generation, stateGeneration.current, requestSelection, selection)
+            ) {
+              const normalized = feature.domain.normalizeResponse(raw);
+              setResponse(normalized);
+              setHasError(false);
+              setSelectedStateError(
+                requestSelection.mode === "exact" && !normalized.available
+                  ? { kind: "unavailable" }
+                  : null
+              );
+            }
+          } catch (_error) {
+            if (
+              !cancelled &&
+              isCurrentRequest(generation, stateGeneration.current, requestSelection, selection)
+            ) {
+              if (requestSelection.mode === "exact") {
+                setSelectedStateError({ kind: "unavailable" });
+              } else {
+                setHasError(true);
+              }
+            }
+          } finally {
+            if (
+              !cancelled &&
+              isCurrentRequest(generation, stateGeneration.current, requestSelection, selection)
+            ) {
+              setSelectedStateLoading(false);
+              timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+            }
+          }
+        }
+
+        const pollImmediately = requestSelection.mode === "exact" || stateMounted.current;
+        stateMounted.current = true;
+        if (pollImmediately) {
+          poll();
+        } else {
+          timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+        }
+        return function () {
+          cancelled = true;
+          if (timer !== null) window.clearTimeout(timer);
+        };
+      },
+      [selection.mode, selection.profileId, selection.sessionId]
+    );
+
+    async function loadCatalogPage(replace) {
+      if (!replace && (!catalog.hasMore || catalogLoading)) return;
+      const requestId = catalogGeneration.current + 1;
+      catalogGeneration.current = requestId;
+      const offset = replace ? 0 : catalog.items.length;
+      setCatalogLoading(true);
+      if (replace) setCatalogError(null);
+      try {
+        const raw = await feature.infrastructure.loadSessions(DEFAULT_PAGE_SIZE, offset);
+        if (requestId !== catalogGeneration.current) return;
+        const page = feature.domain.normalizeCatalogResponse(raw);
+        setCatalog(function (current) {
+          return replace ? page : feature.domain.mergeCatalogPages(current, page);
+        });
+        setCatalogError(null);
+      } catch (_error) {
+        if (requestId === catalogGeneration.current) {
+          setCatalogError("Session list is temporarily unavailable.");
+        }
+      } finally {
+        if (requestId === catalogGeneration.current) setCatalogLoading(false);
+      }
+    }
 
     SDK.hooks.useEffect(function () {
-      let cancelled = false;
-      let timer = null;
-
-      async function poll() {
-        try {
-          const raw = await feature.infrastructure.loadState();
-          if (!cancelled) {
-            setResponse(feature.domain.normalizeResponse(raw));
-            setHasError(false);
-          }
-        } catch (_error) {
-          if (!cancelled) setHasError(true);
-        } finally {
-          if (!cancelled) timer = window.setTimeout(poll, POLL_INTERVAL_MS);
-        }
-      }
-
-      timer = window.setTimeout(poll, POLL_INTERVAL_MS);
-      return function () {
-        cancelled = true;
-        if (timer !== null) window.clearTimeout(timer);
-      };
+      loadCatalogPage(true);
     }, []);
 
-    return { response: response, hasError: hasError };
+    function selectSession(summary) {
+      setSelection(feature.domain.exactSelection(summary.profileId, summary.sessionId));
+      setSelectedStateError(null);
+      setHasError(false);
+    }
+
+    function returnToLatest() {
+      setSelection(feature.domain.latestSelection());
+      setResponse({ available: false, state: null });
+      setSelectedStateLoading(true);
+      setSelectedStateError(null);
+      setHasError(false);
+    }
+
+    function refreshSessions() {
+      return loadCatalogPage(true);
+    }
+
+    function loadMoreSessions() {
+      return loadCatalogPage(false);
+    }
+
+    return {
+      response: response,
+      hasError: hasError,
+      selection: selection,
+      sessions: catalog.items,
+      catalog: catalog,
+      catalogLoading: catalogLoading,
+      catalogError: catalogError,
+      selectedStateLoading: selectedStateLoading,
+      selectedStateError: selectedStateError,
+      hasMatchingResponse: responseMatchesSelection(response, selection),
+      selectSession: selectSession,
+      returnToLatest: returnToLatest,
+      refreshSessions: refreshSessions,
+      loadMoreSessions: loadMoreSessions,
+    };
   }
 
   async function bootstrap() {
@@ -192,10 +463,15 @@ feature.application = (function () {
     }
   }
 
-  return { useDashboardState: useDashboardState, bootstrap: bootstrap };
+  return {
+    useDashboardState: useDashboardState,
+    isCurrentRequest: isCurrentRequest,
+    responseMatchesSelection: responseMatchesSelection,
+    bootstrap: bootstrap,
+  };
 })();
 
-feature.presentation = (function () {
+feature.presentationPrimitives = (function () {
   const e = SDK.React.createElement;
   const Card = SDK.components.Card;
   const CardContent = SDK.components.CardContent;
@@ -234,7 +510,13 @@ feature.presentation = (function () {
       ),
       e(
         "div",
-        { className: "ha-meter", role: "meter", "aria-valuemin": minimum, "aria-valuemax": maximum, "aria-valuenow": value },
+        {
+          className: "ha-meter",
+          role: "meter",
+          "aria-valuemin": minimum,
+          "aria-valuemax": maximum,
+          "aria-valuenow": value,
+        },
         e("span", {
           className: "ha-meter__fill ha-meter__fill--" + tone,
           style: { width: percentage + "%" },
@@ -242,6 +524,59 @@ feature.presentation = (function () {
       )
     );
   }
+
+  function chips(items, emptyText, tone) {
+    if (!items.length) return e("p", { className: "ha-muted" }, emptyText);
+    return e(
+      "div",
+      { className: "ha-chip-row" },
+      items.map(function (item) {
+        const value = typeof item === "string" ? item : item.id;
+        return e("span", { className: "ha-chip ha-chip--" + tone, key: value }, value);
+      })
+    );
+  }
+
+  function emptyState() {
+    return e(
+      "div",
+      { className: "ha-empty" },
+      e("div", { className: "ha-empty__icon", "aria-hidden": "true" }, "◇"),
+      e("h2", null, "No affect state yet"),
+      e(
+        "p",
+        null,
+        "Start a Hermes session with the affect plugin enabled. This page will update after the first state checkpoint."
+      )
+    );
+  }
+
+  function updatedLabel(value) {
+    if (!value) return "unknown";
+    try {
+      return SDK.utils.isoTimeAgo(value);
+    } catch (_error) {
+      return "unknown";
+    }
+  }
+
+  return {
+    statusBadge: statusBadge,
+    sectionCard: sectionCard,
+    metric: metric,
+    chips: chips,
+    emptyState: emptyState,
+    updatedLabel: updatedLabel,
+  };
+})();
+
+feature.presentationStateView = (function () {
+  const e = SDK.React.createElement;
+  const primitives = feature.presentationPrimitives;
+  const sectionCard = primitives.sectionCard;
+  const statusBadge = primitives.statusBadge;
+  const metric = primitives.metric;
+  const chips = primitives.chips;
 
   function moodCore(state) {
     const valence = feature.domain.percent(state.affect.valence, -1, 1);
@@ -276,7 +611,9 @@ feature.presentation = (function () {
         "div",
         { className: "ha-relationship__top" },
         e("strong", { title: relation.id }, relation.id),
-        relation.tension >= 0.5 ? statusBadge("Tense", "warning") : statusBadge("Observed", "muted")
+        relation.tension >= 0.5
+          ? statusBadge("Tense", "warning")
+          : statusBadge("Observed", "muted")
       ),
       e(
         "div",
@@ -290,46 +627,20 @@ feature.presentation = (function () {
     );
   }
 
-  function emptyState() {
-    return e(
-      "div",
-      { className: "ha-empty" },
-      e("div", { className: "ha-empty__icon", "aria-hidden": "true" }, "◇"),
-      e("h2", null, "No affect state yet"),
-      e("p", null, "Start a Hermes session with the affect plugin enabled. This page will update after the first state checkpoint.")
-    );
-  }
-
-  function chips(items, emptyText, tone) {
-    if (!items.length) return e("p", { className: "ha-muted" }, emptyText);
-    return e(
-      "div",
-      { className: "ha-chip-row" },
-      items.map(function (item) {
-        const value = typeof item === "string" ? item : item.id;
-        return e("span", { className: "ha-chip ha-chip--" + tone, key: value }, value);
-      })
-    );
-  }
-
-  function updatedLabel(value) {
-    if (!value) return "unknown";
-    try {
-      return SDK.utils.isoTimeAgo(value);
-    } catch (_error) {
-      return "unknown";
-    }
-  }
-
   function renderState(state, hasError) {
-    const updated = updatedLabel(state.updatedAt);
-    const expression = state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive);
+    const updated = primitives.updatedLabel(state.updatedAt);
+    const expression =
+      state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive);
 
     return e(
       "div",
-      { className: "ha-page" },
+      { className: "ha-state-view" },
       hasError
-        ? e("div", { className: "ha-notice", role: "status" }, "Live refresh is temporarily unavailable. Showing the last valid snapshot.")
+        ? e(
+            "div",
+            { className: "ha-notice", role: "status" },
+            "Live refresh is temporarily unavailable. Showing the last valid snapshot."
+          )
         : null,
       e(
         "header",
@@ -339,11 +650,15 @@ feature.presentation = (function () {
           { className: "ha-hero__copy" },
           e("div", { className: "ha-kicker" }, "Hermes Affect / live state"),
           e("h1", null, state.profileId),
-          e("p", null, "A local, session-scoped view of emotional posture and relationship dynamics."),
+          e(
+            "p",
+            null,
+            "A local, session-scoped view of emotional posture and relationship dynamics."
+          ),
           e(
             "div",
             { className: "ha-hero__meta" },
-            statusBadge(hasError ? "Stale" : "Live", hasError ? "warning" : "success"),
+            primitives.statusBadge(hasError ? "Stale" : "Live", hasError ? "warning" : "success"),
             e("span", null, "Updated " + updated),
             e("span", null, "Revision " + state.revision),
             e("span", { title: state.sessionId }, "Session " + state.sessionId)
@@ -373,16 +688,30 @@ feature.presentation = (function () {
             "div",
             { className: "ha-stat-grid" },
             e("div", { className: "ha-stat" }, e("span", null, "Drive"), e("strong", null, expression)),
-            e("div", { className: "ha-stat" }, e("span", null, "Atmosphere"), e("strong", null, feature.domain.formatNumber(state.atmosphere))),
+            e(
+              "div",
+              { className: "ha-stat" },
+              e("span", null, "Atmosphere"),
+              e("strong", null, feature.domain.formatNumber(state.atmosphere))
+            ),
             e("div", { className: "ha-stat" }, e("span", null, "Model"), e("strong", null, "v" + state.modelVersion)),
-            e("div", { className: "ha-stat" }, e("span", null, "Migration"), e("strong", null, state.migrationRequired ? "Required" : "Current"))
+            e(
+              "div",
+              { className: "ha-stat" },
+              e("span", null, "Migration"),
+              e("strong", null, state.migrationRequired ? "Required" : "Current")
+            )
           )
         )
       ),
       e(
         "section",
         { className: "ha-grid ha-grid--context" },
-        sectionCard("Active sensitivities", "Current turn", chips(state.sensitivities, "No active sensitivities.", "accent")),
+        sectionCard(
+          "Active sensitivities",
+          "Current turn",
+          chips(state.sensitivities, "No active sensitivities.", "accent")
+        ),
         sectionCard("Open conflicts", "Relationship heat", chips(state.conflicts, "No open conflicts.", "warning"))
       ),
       sectionCard(
@@ -401,7 +730,11 @@ feature.presentation = (function () {
               "div",
               { className: "ha-chip-row" },
               state.tuning.map(function (entry) {
-                return e("span", { className: "ha-chip ha-chip--muted", key: entry[0] }, feature.domain.label(entry[0]) + " " + entry[1].toFixed(2));
+                return e(
+                  "span",
+                  { className: "ha-chip ha-chip--muted", key: entry[0] },
+                  feature.domain.label(entry[0]) + " " + entry[1].toFixed(2)
+                );
               })
             )
           )
@@ -409,11 +742,262 @@ feature.presentation = (function () {
     );
   }
 
+  return { renderState: renderState };
+})();
+
+feature.presentationSessionNavigator = (function () {
+  const e = SDK.React.createElement;
+  const primitives = feature.presentationPrimitives;
+
+  function shortId(value) {
+    if (value.length <= 28) return value;
+    return value.slice(0, 12) + "…" + value.slice(-12);
+  }
+
+  function groupsFor(sessions) {
+    const groups = [];
+    const byProfile = Object.create(null);
+    sessions.forEach(function (session) {
+      let group = byProfile[session.profileId];
+      if (!group) {
+        group = { profileId: session.profileId, items: [] };
+        byProfile[session.profileId] = group;
+        groups.push(group);
+      }
+      group.items.push(session);
+    });
+    return groups;
+  }
+
+  function sessionIsSelected(selection, session) {
+    return (
+      selection.mode === "exact" &&
+      selection.profileId === session.profileId &&
+      selection.sessionId === session.sessionId
+    );
+  }
+
+  function sessionRow(session, selected, onSelect) {
+    return e(
+      "button",
+      {
+        type: "button",
+        className: "ha-session-row" + (selected ? " ha-session-row--selected" : ""),
+        "aria-pressed": selected,
+        title: session.profileId + " / " + session.sessionId,
+        onClick: function () {
+          onSelect(session);
+        },
+      },
+      e("span", { className: "ha-session-row__marker", "aria-hidden": "true" }, selected ? "●" : "○"),
+      e(
+        "span",
+        { className: "ha-session-row__body" },
+        e("strong", null, shortId(session.sessionId)),
+        e(
+          "span",
+          { className: "ha-session-row__meta" },
+          "Updated " + primitives.updatedLabel(session.updatedAt) + " · Rev " + session.revision
+        ),
+        e(
+          "span",
+          { className: "ha-session-row__meta" },
+          feature.domain.label(session.mood) + " · " + feature.domain.label(session.posture) + " · v" + session.modelVersion
+        )
+      )
+    );
+  }
+
+  function latestRow(model) {
+    const selected = model.selection.mode === "latest";
+    return e(
+      "button",
+      {
+        type: "button",
+        className: "ha-session-latest" + (selected ? " ha-session-latest--selected" : ""),
+        "aria-pressed": selected,
+        onClick: model.returnToLatest,
+      },
+      e("span", { className: "ha-session-latest__marker", "aria-hidden": "true" }, selected ? "●" : "○"),
+      e(
+        "span",
+        { className: "ha-session-row__body" },
+        e("strong", null, "Latest session"),
+        e("span", { className: "ha-session-row__meta" }, "Newest valid snapshot in this container")
+      )
+    );
+  }
+
+  function sessionNavigator(model) {
+    const queryPair = SDK.hooks.useState("");
+    const query = queryPair[0];
+    const setQuery = queryPair[1];
+    const normalizedQuery = query.trim().toLowerCase();
+    const filtered = model.sessions.filter(function (session) {
+      if (!normalizedQuery) return true;
+      return (
+        session.profileId.toLowerCase().includes(normalizedQuery) ||
+        session.sessionId.toLowerCase().includes(normalizedQuery)
+      );
+    });
+    const groups = groupsFor(filtered);
+    const selectedTarget =
+      model.selection.mode === "exact"
+        ? model.selection.profileId + " / " + model.selection.sessionId
+        : null;
+
+    return e(
+      "aside",
+      { className: "ha-session-navigator", "aria-label": "Affect session navigation" },
+      e(
+        "div",
+        { className: "ha-session-navigator__header" },
+        e(
+          "div",
+          null,
+          e("div", { className: "ha-kicker" }, "Session navigator"),
+          e("h2", null, "Retained snapshots"),
+          e("p", { className: "ha-muted" }, "Loaded sessions only; refresh to check for new entries.")
+        ),
+        e(
+          "button",
+          {
+            type: "button",
+            className: "ha-control-button",
+            onClick: model.refreshSessions,
+            disabled: model.catalogLoading,
+          },
+          model.catalogLoading ? "Refreshing…" : "Refresh"
+        )
+      ),
+      e("div", { className: "ha-session-navigator__latest" }, latestRow(model)),
+      e(
+        "label",
+        { className: "ha-session-search" },
+        e("span", null, "Filter loaded sessions"),
+        e("input", {
+          type: "search",
+          value: query,
+          placeholder: "Profile or session ID",
+          onChange: function (event) {
+            setQuery(event.target.value);
+          },
+        })
+      ),
+      selectedTarget
+        ? e(
+            "div",
+            { className: "ha-session-selection", role: "status" },
+            e("span", null, "Selected: " + shortId(selectedTarget)),
+            model.selectedStateLoading ? e("span", null, "Loading…") : null,
+            model.selectedStateError
+              ? e("span", { className: "ha-session-selection__error" }, "Unavailable")
+              : null,
+            e(
+              "button",
+              { type: "button", className: "ha-link-button", onClick: model.returnToLatest },
+              "Return to Latest session"
+            )
+          )
+        : null,
+      model.catalogError
+        ? e(
+            "div",
+            { className: "ha-session-error", role: "alert" },
+            e("span", null, model.catalogError),
+            e("button", { type: "button", className: "ha-link-button", onClick: model.refreshSessions }, "Retry")
+          )
+        : null,
+      groups.length
+        ? e(
+            "div",
+            { className: "ha-session-groups" },
+            groups.map(function (group) {
+              return e(
+                "section",
+                { className: "ha-session-group", key: group.profileId },
+                e("h3", { title: group.profileId }, group.profileId),
+                group.items.map(function (session) {
+                  return sessionRow(
+                    session,
+                    sessionIsSelected(model.selection, session),
+                    model.selectSession
+                  );
+                })
+              );
+            })
+          )
+        : e(
+            "p",
+            { className: "ha-muted ha-session-navigator__empty" },
+            normalizedQuery ? "No loaded sessions match this filter." : "No retained sessions are available."
+          ),
+      model.catalog.hasMore
+        ? e(
+            "button",
+            {
+              type: "button",
+              className: "ha-load-more",
+              onClick: model.loadMoreSessions,
+              disabled: model.catalogLoading,
+            },
+            model.catalogLoading ? "Loading…" : "Load more sessions"
+          )
+        : null
+    );
+  }
+
+  return { sessionNavigator: sessionNavigator };
+})();
+
+feature.presentation = (function () {
+  const e = SDK.React.createElement;
+  const primitives = feature.presentationPrimitives;
+  const stateView = feature.presentationStateView;
+  const navigator = feature.presentationSessionNavigator;
+
+  function selectionPanel(model) {
+    if (model.selectedStateLoading) {
+      return e(
+        "div",
+        { className: "ha-selection-panel", role: "status" },
+        e("div", { className: "ha-loading-mark", "aria-hidden": "true" }, "…"),
+        e("h2", null, "Loading selected session"),
+        e("p", null, "The current layout will update when this exact profile/session snapshot arrives.")
+      );
+    }
+    if (model.selection.mode === "latest" && !model.selectedStateError) {
+      return primitives.emptyState();
+    }
+    if (model.selectedStateError) {
+      return e(
+        "div",
+        { className: "ha-selection-panel", role: "alert" },
+        e("div", { className: "ha-empty__icon", "aria-hidden": "true" }, "◇"),
+        e("h2", null, "Selected session unavailable"),
+        e(
+          "p",
+          null,
+          "This retained state may have been collected or cannot be read. Choose Latest session to continue."
+        )
+      );
+    }
+    return primitives.emptyState();
+  }
+
   function createPage(initialResponse) {
     return function AffectDashboardPage() {
       const model = feature.application.useDashboardState(initialResponse);
-      if (!model.response.available || !model.response.state) return emptyState();
-      return renderState(model.response.state, model.hasError);
+      const stateContent =
+        model.hasMatchingResponse && model.response.state
+          ? stateView.renderState(model.response.state, model.hasError)
+          : selectionPanel(model);
+      return e(
+        "div",
+        { className: "ha-page" },
+        navigator.sessionNavigator(model),
+        e("main", { className: "ha-state-column" }, stateContent)
+      );
     };
   }
 

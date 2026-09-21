@@ -28,10 +28,26 @@ state.
 
 ## What the page shows
 
-The page polls the latest valid state visible in the current container every
-five seconds. It shows mood, posture, freshness, expression drive, perceived
+The page opens in **Latest session** mode and polls the latest valid state
+visible in the current container every five seconds. It also provides a
+bounded retained-session navigator, grouped by profile, with exact
+profile/session selection, refresh, load-more pagination, and a loaded-session
+filter. Exact selections remain pinned while polling; if retention removes one,
+the page reports it as unavailable instead of switching silently.
+
+The state view shows mood, posture, freshness, expression drive, perceived
 atmosphere, affect values, relationships, active sensitivities, open conflicts,
 and temporary tuning overrides.
+
+The read-only API exposes the existing latest-state route plus these selection
+forms:
+
+```text
+GET /api/plugins/hermes-affect/state?profile_id=<id>&session_id=<id>
+GET /api/plugins/hermes-affect/sessions?limit=50&offset=0
+```
+
+The catalog is capped at 100 entries per page and returns summaries only.
 
 The response reuses the safe projection used by `/affect state`. It excludes
 raw messages, audit records, observed-participant history, SOUL contents and
@@ -55,7 +71,8 @@ dashboard/
 ├── tests/
 ├── tools/build_dashboard.py
 ├── docs/
-└── PLAN.md
+├── PLAN.md
+└── SESSION_NAVIGATION_PLAN.md
 ```
 
 Rebuild and verify the browser assets with:

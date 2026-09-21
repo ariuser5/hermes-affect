@@ -28,10 +28,16 @@ Checkpoint date: 2026-09-21.
 - [x] Complete Phase 1 of retained-session navigation: bounded summary
       contracts, collision-safe exact reads, shared valid-state parsing, and
       deterministic recent-state pages.
-- [ ] Implement the remaining retained-session navigation phases.
+- [x] Complete Phase 2 of retained-session navigation: bounded session catalog
+      reads and exact profile/session selection behind the existing feature
+      gate.
+- [x] Complete the local implementation of Phases 3–5: controller selection
+      state, responsive navigator, generated assets, tests, and documentation.
+- [ ] Complete live Hermes visual and packaged-extension smoke checks.
 
-The first navigation phase is implemented, but no dashboard route or browser
-behavior has changed yet. No Docker configuration, deployed Hermes
+The retained-session navigation implementation is complete locally, but live
+Hermes visual and packaged-extension checks remain. No Docker configuration,
+deployed Hermes
 configuration, or Raspberry Pi state was changed at this checkpoint. The
 checked-in extension remains inaccessible unless it is installed in Hermes and
 `HERMES_AFFECT_DASHBOARD` is explicitly enabled in the dashboard process.
@@ -72,9 +78,11 @@ dashboard/
 │   └── style.css                         # generated or reviewed CSS
 ├── hermes_affect_dashboard/
 │   ├── application/
-│   │   ├── inspection.py                 # use cases and response assembly
+│   │   ├── inspection.py                 # state response assembly
+│   │   ├── session_catalog.py            # summaries and pagination
 │   │   └── feature_gate.py               # strict environment toggle
 │   ├── domain/
+│   │   ├── session_models.py             # catalog response models
 │   │   └── view_models.py                # bounded API response models
 │   └── infrastructure/
 │       └── state_reader.py                # StateStore-backed read adapter
@@ -83,7 +91,11 @@ dashboard/
 │   │   ├── application/                  # polling and view-model orchestration
 │   │   ├── domain/                       # scales, labels, state validation
 │   │   ├── infrastructure/               # authenticated API client
-│   │   ├── presentation/                 # Hermes SDK components and styles
+│   │   ├── presentation/                 # navigator, state view, and styles
+│   │   │   ├── primitives.js
+│   │   │   ├── state_view.js
+│   │   │   ├── session_navigator.js
+│   │   │   └── page.js
 │   │   └── index.js                      # registration boundary
 │   └── README.md
 ├── tests/                                # focused dashboard tests

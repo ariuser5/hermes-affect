@@ -18,7 +18,10 @@ from dashboard.hermes_affect_dashboard.application.feature_gate import (
 from dashboard.hermes_affect_dashboard.application.inspection import (
     DashboardInspectionService,
 )
-from dashboard.hermes_affect_dashboard.application.session_catalog import session_summary
+from dashboard.hermes_affect_dashboard.application.session_catalog import (
+    DashboardSessionCatalogService,
+    session_summary,
+)
 from dashboard.hermes_affect_dashboard.domain.session_models import SessionCatalogResponse
 from dashboard.hermes_affect_dashboard.infrastructure.state_reader import (
     FileStateReader,
@@ -162,6 +165,17 @@ class StateReaderTests(unittest.TestCase):
             assert selected is not None
             self.assertEqual((selected.profile_id, selected.session_id), ("bot/a", "session/a"))
 
+    def test_exact_state_skips_malformed_and_removed_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            path = store.state_path("bot:one", "session:one")
+            path.parent.mkdir(parents=True)
+            path.write_text("not json", encoding="utf-8")
+
+            self.assertIsNone(store.load_exact("bot:one", "session:one"))
+            path.unlink()
+            self.assertIsNone(store.load_exact("bot:one", "session:one"))
+
     def test_recent_returns_valid_states_in_deterministic_pages(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             store = StateStore(temporary)
@@ -230,6 +244,53 @@ class SessionSummaryTests(unittest.TestCase):
         self.assertEqual(summary["model_version"], 0)
         self.assertNotIn("secret", json.dumps(typed_summary))
 
+    def test_catalog_page_projects_one_extra_state_for_has_more(self) -> None:
+        states = [
+            AffectState.initial("bot:one", "session:one"),
+            AffectState.initial("bot:two", "session:two"),
+            AffectState.initial("bot:three", "session:three"),
+            AffectState.initial("bot:four", "session:four"),
+        ]
+
+        class Reader:
+            def __init__(self) -> None:
+                self.request: tuple[int, int] | None = None
+
+            def recent_states(self, limit: int, offset: int = 0) -> list[AffectState]:
+                self.request = (limit, offset)
+                return states[offset : offset + limit]
+
+            def exact_state(self, profile_id: str, session_id: str) -> AffectState | None:
+                return next(
+                    (
+                        state
+                        for state in states
+                        if state.profile_id == profile_id and state.session_id == session_id
+                    ),
+                    None,
+                )
+
+        reader = Reader()
+        service = DashboardSessionCatalogService(reader)
+
+        response = service.page(limit=2, offset=1)
+
+        self.assertEqual(reader.request, (3, 1))
+        self.assertEqual(response["limit"], 2)
+        self.assertEqual(response["offset"], 1)
+        self.assertTrue(response["has_more"])
+        self.assertEqual(
+            [(item["profile_id"], item["session_id"]) for item in response["items"]],
+            [("bot:two", "session:two"), ("bot:three", "session:three")],
+        )
+
+    def test_catalog_page_rejects_out_of_range_values(self) -> None:
+        service = DashboardSessionCatalogService(object())  # type: ignore[arg-type]
+
+        for limit, offset in ((0, 0), (101, 0), (True, 0), (50, -1), (50, True)):
+            with self.subTest(limit=limit, offset=offset), self.assertRaises(ValueError):
+                service.page(limit, offset)
+
     def test_service_returns_explicit_empty_state(self) -> None:
         class EmptyReader:
             def latest_state(self) -> None:
@@ -275,6 +336,7 @@ class PluginApiAdapterTests(unittest.TestCase):
         fake_fastapi = types.ModuleType("fastapi")
         fake_fastapi.APIRouter = FakeRouter
         fake_fastapi.HTTPException = FakeHttpException
+        fake_fastapi.Query = lambda default=None, **_kwargs: default
         module_name = "hermes_affect_dashboard_adapter_test"
         spec = importlib.util.spec_from_file_location(
             module_name, REPOSITORY_ROOT / "dashboard" / "plugin_api.py"
@@ -291,9 +353,14 @@ class PluginApiAdapterTests(unittest.TestCase):
     def test_adapter_exports_only_read_only_state_route(self) -> None:
         module = self._load_adapter(enabled="0")
 
-        self.assertEqual([path for path, _ in module.router.routes], ["/state"])
+        self.assertEqual(
+            [path for path, _ in module.router.routes], ["/state", "/sessions"]
+        )
         with self.assertRaises(module.HTTPException) as raised:
             asyncio.run(module.get_current_state())
+        self.assertEqual(raised.exception.status_code, 404)
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.get_sessions())
         self.assertEqual(raised.exception.status_code, 404)
 
     def test_enabled_adapter_returns_service_response(self) -> None:
@@ -307,6 +374,66 @@ class PluginApiAdapterTests(unittest.TestCase):
         response = asyncio.run(module.get_current_state())
 
         self.assertEqual(response, {"available": False, "state": None})
+
+    def test_partial_selection_is_rejected(self) -> None:
+        module = self._load_adapter(enabled="1")
+
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.get_current_state(profile_id="bot:one"))
+
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_catalog_rejects_invalid_bounds(self) -> None:
+        module = self._load_adapter(enabled="1")
+
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.get_sessions(limit=101))
+
+        self.assertEqual(raised.exception.status_code, 422)
+
+    def test_catalog_route_returns_bounded_service_response(self) -> None:
+        module = self._load_adapter(enabled="1")
+
+        class Catalog:
+            def page(self, limit: int, offset: int) -> dict:
+                return {
+                    "items": [{"profile_id": "bot:one", "session_id": "session:one"}],
+                    "limit": limit,
+                    "offset": offset,
+                    "has_more": False,
+                }
+
+        module._SESSION_CATALOG = Catalog()
+        response = asyncio.run(module.get_sessions(limit=2, offset=4))
+
+        self.assertEqual(response["limit"], 2)
+        self.assertEqual(response["offset"], 4)
+        self.assertFalse(response["has_more"])
+
+    def test_exact_selection_returns_snapshot_and_maps_missing_to_404(self) -> None:
+        module = self._load_adapter(enabled="1")
+
+        class Inspection:
+            def current_state(self, profile_id=None, session_id=None) -> dict:
+                if (profile_id, session_id) == ("bot:one", "session:one"):
+                    return {
+                        "available": True,
+                        "state": {"profile_id": profile_id, "session_id": session_id},
+                    }
+                return {"available": False, "state": None}
+
+        module._INSPECTION = Inspection()
+        selected = asyncio.run(
+            module.get_current_state(profile_id="bot:one", session_id="session:one")
+        )
+
+        self.assertTrue(selected["available"])
+        self.assertEqual(selected["state"]["session_id"], "session:one")
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(
+                module.get_current_state(profile_id="bot:gone", session_id="session:gone")
+            )
+        self.assertEqual(raised.exception.status_code, 404)
 
 
 if __name__ == "__main__":

@@ -38,4 +38,63 @@ assert.equal(
   JSON.stringify({ available: false, state: null }),
 );
 
+assert.equal(JSON.stringify(feature.domain.latestSelection()), JSON.stringify({ mode: "latest" }));
+assert.equal(
+  JSON.stringify(feature.domain.exactSelection("bot:one", "session:one")),
+  JSON.stringify({ mode: "exact", profileId: "bot:one", sessionId: "session:one" }),
+);
+assert.equal(
+  JSON.stringify(feature.domain.exactSelection("", "session:one")),
+  JSON.stringify({ mode: "latest" }),
+);
+assert.equal(
+  feature.domain.sameSelection(
+    feature.domain.exactSelection("bot:one", "session:one"),
+    feature.domain.exactSelection("bot:one", "session:one"),
+  ),
+  true,
+);
+
+const catalog = feature.domain.normalizeCatalogResponse({
+  items: [
+    {
+      profile_id: "bot:one",
+      session_id: "session:one",
+      updated_at: "2026-09-21T10:00:00+00:00",
+      revision: 4,
+      mood: "guarded",
+      response_posture: "terse",
+      model_version: 2,
+    },
+    { profile_id: "", session_id: "missing" },
+  ],
+  limit: 2,
+  offset: 0,
+  has_more: true,
+});
+assert.equal(catalog.items.length, 1);
+assert.equal(catalog.items[0].profileId, "bot:one");
+assert.equal(catalog.items[0].posture, "terse");
+assert.equal(catalog.hasMore, true);
+
+const merged = feature.domain.mergeCatalogPages(catalog, {
+  items: [
+    catalog.items[0],
+    {
+      profileId: "bot:two",
+      sessionId: "session:two",
+      updatedAt: "2026-09-21T09:00:00+00:00",
+      revision: 1,
+      mood: "neutral",
+      posture: "normal_engagement",
+      modelVersion: 2,
+    },
+  ],
+  limit: 2,
+  offset: 1,
+  hasMore: false,
+});
+assert.equal(merged.items.length, 2);
+assert.equal(merged.items[1].profileId, "bot:two");
+
 console.log("dashboard domain tests passed");

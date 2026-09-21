@@ -33,8 +33,8 @@ The backend mirrors the main plugin:
 
 - `domain/` defines bounded view models and validation without Hermes or
   FastAPI imports.
-- `application/` chooses the state and assembles the response using the shared
-  safe projection.
+- `application/` chooses the latest or exact state, assembles the response
+  using the shared safe projection, and produces bounded session catalog pages.
 - `infrastructure/` reads the file-backed state store and translates storage
   failures at the boundary.
 - `plugin_api.py` is the thin Hermes/FastAPI adapter.
@@ -49,22 +49,24 @@ The browser source uses equivalent boundaries:
 
 ## State selection
 
-The first release selects the latest valid state available in the current
-container. The deployment currently uses a separate data root for each Hermes
-container, so this normally represents one bot.
+The page first selects the latest valid state available in the current
+container. A bounded catalog can then select one exact profile/session pair.
+The deployment currently uses a separate data root for each Hermes container,
+so this normally represents one bot, while profile grouping keeps the UI
+correct if a container sees more than one profile.
 
-If multiple profiles are later enabled in one container, an explicit profile
-selector may be added using a bounded `latest per profile` query. Cross-container
-aggregation is intentionally excluded: it would introduce another service,
-credential flow, or broad read mount and would weaken the existing isolation
-model.
+Cross-container aggregation is intentionally excluded: it would introduce
+another service, credential flow, or broad read mount and would weaken the
+existing isolation model.
 
 ## API shape
 
-The planned first endpoint is:
+The read-only endpoints are:
 
 ```text
 GET /api/plugins/hermes-affect/state
+GET /api/plugins/hermes-affect/state?profile_id=<id>&session_id=<id>
+GET /api/plugins/hermes-affect/sessions?limit=50&offset=0
 ```
 
 The response wraps the same projection as `/affect state`:
@@ -89,6 +91,10 @@ When no valid state exists, the endpoint returns
 - valence, arousal, frustration, and offended values;
 - current relationships, active sensitivities, open conflicts, and tuning
   overrides.
+
+The catalog route returns only profile/session IDs and bounded update, revision,
+mood, posture, and model-version summaries. Exact selection requires both IDs;
+missing, malformed, collected, or mismatched exact state returns a bounded 404.
 
 Excluded fields are recorded in
 [`privacy-and-security.md`](privacy-and-security.md).

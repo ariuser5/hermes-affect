@@ -4,11 +4,248 @@
   --ha-warning: var(--color-warning, #f0b35d);
   --ha-danger: var(--color-destructive, #ef6b73);
   display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
   gap: calc(1.25rem * var(--spacing-mul, 1));
   max-width: 1480px;
   margin: 0 auto;
   padding: calc(1.25rem * var(--spacing-mul, 1));
   color: var(--color-foreground);
+}
+
+.ha-state-column {
+  display: grid;
+  min-width: 0;
+  gap: calc(1.25rem * var(--spacing-mul, 1));
+}
+
+.ha-session-navigator {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  align-self: start;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--color-border) 82%, var(--ha-accent) 18%);
+  border-radius: calc(var(--radius, 0.5rem) * 1.25);
+  background: color-mix(in srgb, var(--color-card) 97%, var(--ha-accent) 3%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-foreground) 5%, transparent);
+}
+
+.ha-session-navigator__header,
+.ha-session-selection,
+.ha-session-error {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.ha-session-navigator__header h2 {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+
+.ha-session-navigator__header p {
+  font-size: 0.75rem;
+}
+
+.ha-control-button,
+.ha-load-more,
+.ha-link-button,
+.ha-session-latest,
+.ha-session-row {
+  cursor: pointer;
+  font: inherit;
+}
+
+.ha-control-button,
+.ha-load-more {
+  flex: 0 0 auto;
+  padding: 0.48rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--ha-accent) 45%, var(--color-border));
+  border-radius: var(--radius, 0.5rem);
+  color: var(--ha-accent);
+  background: color-mix(in srgb, var(--ha-accent) 8%, var(--color-card));
+  font-family: var(--theme-font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+}
+
+.ha-control-button:disabled,
+.ha-load-more:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.ha-control-button:focus-visible,
+.ha-load-more:focus-visible,
+.ha-link-button:focus-visible,
+.ha-session-latest:focus-visible,
+.ha-session-row:focus-visible,
+.ha-session-search input:focus-visible {
+  outline: 2px solid var(--ha-accent);
+  outline-offset: 2px;
+}
+
+.ha-session-latest,
+.ha-session-row {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 0.5rem);
+  color: var(--color-foreground);
+  background: color-mix(in srgb, var(--color-background) 55%, transparent);
+  text-align: left;
+}
+
+.ha-session-latest {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.7rem;
+}
+
+.ha-session-latest--selected,
+.ha-session-row--selected {
+  border-color: color-mix(in srgb, var(--ha-accent) 65%, var(--color-border));
+  background: color-mix(in srgb, var(--ha-accent) 10%, var(--color-card));
+  box-shadow: inset 3px 0 0 var(--ha-accent);
+}
+
+.ha-session-latest__marker,
+.ha-session-row__marker {
+  flex: 0 0 auto;
+  color: var(--ha-accent);
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+.ha-session-row__body {
+  display: grid;
+  min-width: 0;
+  gap: 0.2rem;
+}
+
+.ha-session-row__body strong,
+.ha-session-row__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-session-row__body strong {
+  font-family: var(--theme-font-mono, ui-monospace, monospace);
+  font-size: 0.75rem;
+}
+
+.ha-session-row__meta {
+  color: var(--color-muted-foreground);
+  font-size: 0.68rem;
+}
+
+.ha-session-search {
+  display: grid;
+  gap: 0.35rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+}
+
+.ha-session-search input {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 0.5rem);
+  color: var(--color-foreground);
+  background: var(--color-background);
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.ha-session-groups {
+  display: grid;
+  gap: 0.8rem;
+  max-height: min(55vh, 620px);
+  overflow: auto;
+  padding-right: 0.15rem;
+}
+
+.ha-session-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.ha-session-group h3 {
+  margin: 0;
+  overflow: hidden;
+  color: var(--color-muted-foreground);
+  font-family: var(--theme-font-mono, ui-monospace, monospace);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ha-session-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  padding: 0.62rem;
+}
+
+.ha-session-selection,
+.ha-session-error {
+  flex-wrap: wrap;
+  padding: 0.65rem 0.7rem;
+  border: 1px solid color-mix(in srgb, var(--ha-accent) 35%, var(--color-border));
+  border-radius: var(--radius, 0.5rem);
+  color: var(--color-muted-foreground);
+  background: color-mix(in srgb, var(--ha-accent) 6%, var(--color-card));
+  font-size: 0.72rem;
+}
+
+.ha-session-selection__error,
+.ha-session-error {
+  color: var(--ha-warning);
+}
+
+.ha-link-button {
+  padding: 0;
+  border: 0;
+  color: var(--ha-accent);
+  background: transparent;
+  font-size: 0.72rem;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.ha-session-navigator__empty {
+  padding: 0.4rem 0;
+  font-size: 0.78rem;
+}
+
+.ha-selection-panel {
+  display: grid;
+  place-items: center;
+  min-height: 55vh;
+  padding: 2rem;
+  border: 1px dashed color-mix(in srgb, var(--ha-accent) 40%, var(--color-border));
+  border-radius: calc(var(--radius, 0.5rem) * 1.25);
+  text-align: center;
+}
+
+.ha-selection-panel h2 {
+  margin: 0.5rem 0 0.2rem;
+}
+
+.ha-selection-panel p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--color-muted-foreground);
+}
+
+.ha-loading-mark {
+  color: var(--ha-accent);
+  font-size: 2.5rem;
+  line-height: 1;
+  animation: ha-breathe 1.4s ease-in-out infinite;
 }
 
 .ha-hero {
@@ -347,6 +584,18 @@
 }
 
 @media (max-width: 900px) {
+  .ha-page {
+    grid-template-columns: 1fr;
+  }
+
+  .ha-session-navigator {
+    position: static;
+  }
+
+  .ha-session-groups {
+    max-height: 360px;
+  }
+
   .ha-hero,
   .ha-grid--overview,
   .ha-grid--context {
@@ -360,6 +609,7 @@
 
 @media (max-width: 520px) {
   .ha-page { padding: 0.75rem; }
+  .ha-session-navigator { padding: 0.8rem; }
   .ha-hero { padding: 1.2rem; }
   .ha-stat-grid,
   .ha-mini-grid { grid-template-columns: 1fr; }

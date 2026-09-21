@@ -35,6 +35,11 @@ designed for `/affect state`:
 - current relationship dimensions;
 - active sensitivities, open conflicts, and tuning overrides.
 
+The retained-session catalog exposes only bounded profile/session IDs, update
+time, revision, mood, posture, and model version. Exact state selection requires
+the paired profile and session IDs and returns the same safe current-state
+projection as the state route.
+
 These values can reveal interpersonal dynamics. They are acceptable only
 behind the reviewed dashboard authentication boundary and must not be added to
 normal model context or public chat responses by this feature.
@@ -58,6 +63,8 @@ The endpoint must never return:
 - Initial routes are `GET` only.
 - No calm, heat, tune, reset, migration, or deletion controls.
 - Errors are bounded and omit state-file contents and paths.
+- Catalog pages are bounded and exact selection verifies parsed identifiers
+  after sanitized path resolution.
 - State values are parsed through the versioned domain model before rendering.
 - Browser rendering uses text properties and never interpolates state as HTML.
 - Polling is bounded, non-overlapping, and stops when the page unmounts.
@@ -68,4 +75,3 @@ The existing public experimental command and this authenticated dashboard must
 share one projection so their privacy behavior cannot drift. Once the
 dashboard is validated, separately review whether `/affect state` should become
 administrative-only or be removed before exposure to untrusted chat users.
-
