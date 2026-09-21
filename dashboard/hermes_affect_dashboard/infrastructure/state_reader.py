@@ -36,3 +36,8 @@ class FileStateReader:
     def latest_state(self) -> AffectState | None:
         return self.store.latest()
 
+    def exact_state(self, profile_id: str, session_id: str) -> AffectState | None:
+        return self.store.load_exact(profile_id, session_id)
+
+    def recent_states(self, limit: int, offset: int = 0) -> list[AffectState]:
+        return self.store.recent(limit, offset)

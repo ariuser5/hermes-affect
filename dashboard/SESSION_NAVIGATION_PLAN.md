@@ -255,13 +255,14 @@ task.
 
 ### Phase 1 — contracts and persistence reads
 
-- [ ] Add backend response types and pure summary projection tests.
-- [ ] Add `StateStore.load_exact()` with collision/mismatch tests.
-- [ ] Refactor shared valid-state iteration without changing current latest
+- [x] Add backend response types and pure summary projection tests.
+- [x] Add `StateStore.load_exact()` with collision/mismatch tests.
+- [x] Refactor shared valid-state iteration without changing current latest
       behavior.
-- [ ] Add ordered, bounded recent-state reads with pagination tests.
+- [x] Add ordered, bounded recent-state reads with pagination tests.
 
-Checkpoint: storage tests pass and no dashboard route or UI behavior changes.
+Checkpoint: storage and projection tests pass; no dashboard route or UI
+behavior changes were made.
 
 ### Phase 2 — dashboard backend
 

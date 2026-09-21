@@ -25,10 +25,13 @@ Checkpoint date: 2026-09-21.
       explicit authorization.
 - [x] Record the requested retained-session navigation design in
       [`SESSION_NAVIGATION_PLAN.md`](SESSION_NAVIGATION_PLAN.md).
-- [ ] Implement retained-session navigation; no source implementation exists at
-      this checkpoint.
+- [x] Complete Phase 1 of retained-session navigation: bounded summary
+      contracts, collision-safe exact reads, shared valid-state parsing, and
+      deterministic recent-state pages.
+- [ ] Implement the remaining retained-session navigation phases.
 
-Source behavior is implemented, but no Docker configuration, deployed Hermes
+The first navigation phase is implemented, but no dashboard route or browser
+behavior has changed yet. No Docker configuration, deployed Hermes
 configuration, or Raspberry Pi state was changed at this checkpoint. The
 checked-in extension remains inaccessible unless it is installed in Hermes and
 `HERMES_AFFECT_DASHBOARD` is explicitly enabled in the dashboard process.

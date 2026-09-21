@@ -81,6 +81,18 @@ class StateStore:
         except FileNotFoundError:
             return None
 
+    def load_exact(self, profile_id: str, session_id: str) -> AffectState | None:
+        """Load a state only when its persisted identity matches the request."""
+
+        path = self.state_path(profile_id, session_id)
+        try:
+            state = self._load_path(path)
+        except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
+            return None
+        if state.profile_id != profile_id or state.session_id != session_id:
+            return None
+        return state
+
     def latest_for_profile(self, profile_id: str) -> AffectState | None:
         """Load the most recently updated valid session for a profile."""
 
@@ -97,19 +109,40 @@ class StateStore:
             return None
         return self._latest_from_paths(self.root.glob("*/sessions/*.json"))
 
+    def recent(self, limit: int, offset: int = 0) -> list[AffectState]:
+        """Return a bounded page of valid states ordered by update time."""
+
+        if isinstance(limit, bool) or not isinstance(limit, int) or limit <= 0:
+            raise ValueError("limit must be a positive integer")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("offset must be a non-negative integer")
+        if not self.root.is_dir():
+            return []
+
+        states = list(self._valid_states(self.root.glob("*/sessions/*.json")))
+        states.sort(key=lambda item: (item[1].profile_id, item[1].session_id))
+        states.sort(key=lambda item: item[2], reverse=True)
+        return [state for _, state, _ in states[offset : offset + limit]]
+
     def _latest_from_paths(self, paths: Iterator[Path]) -> AffectState | None:
         latest: AffectState | None = None
         latest_updated_at: datetime | None = None
+        for _, state, updated_at in self._valid_states(paths):
+            if latest_updated_at is None or updated_at > latest_updated_at:
+                latest = state
+                latest_updated_at = updated_at
+        return latest
+
+    def _valid_states(
+        self, paths: Iterator[Path]
+    ) -> Iterator[tuple[Path, AffectState, datetime]]:
         for path in sorted(paths):
             try:
                 state = self._load_path(path)
                 updated_at = self._updated_at(state)
             except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
                 continue
-            if latest_updated_at is None or updated_at > latest_updated_at:
-                latest = state
-                latest_updated_at = updated_at
-        return latest
+            yield path, state, updated_at
 
     @staticmethod
     def _load_path(path: Path) -> AffectState:

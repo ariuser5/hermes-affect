@@ -18,6 +18,8 @@ from dashboard.hermes_affect_dashboard.application.feature_gate import (
 from dashboard.hermes_affect_dashboard.application.inspection import (
     DashboardInspectionService,
 )
+from dashboard.hermes_affect_dashboard.application.session_catalog import session_summary
+from dashboard.hermes_affect_dashboard.domain.session_models import SessionCatalogResponse
 from dashboard.hermes_affect_dashboard.infrastructure.state_reader import (
     FileStateReader,
     resolve_state_root,
@@ -144,6 +146,89 @@ class StateReaderTests(unittest.TestCase):
             self.assertIsNotNone(selected)
             assert selected is not None
             self.assertEqual((selected.profile_id, selected.session_id), ("bot:two", "newer"))
+
+    def test_exact_state_rejects_sanitized_path_collision(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            stored = AffectState.initial("bot/a", "session/a")
+            path = store.state_path("bot:a", "session:a")
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(stored.to_dict()), encoding="utf-8")
+
+            self.assertIsNone(store.load_exact("bot:a", "session:a"))
+            selected = store.load_exact("bot/a", "session/a")
+
+            self.assertIsNotNone(selected)
+            assert selected is not None
+            self.assertEqual((selected.profile_id, selected.session_id), ("bot/a", "session/a"))
+
+    def test_recent_returns_valid_states_in_deterministic_pages(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            tied_later = AffectState.initial("bot:z", "session:z")
+            tied_later.updated_at = "2026-09-19T09:00:00+00:00"
+            tied_earlier = AffectState.initial("bot:a", "session:a")
+            tied_earlier.updated_at = "2026-09-19T09:00:00+00:00"
+            older = AffectState.initial("bot:old", "session:old")
+            older.updated_at = "2026-09-19T08:00:00+00:00"
+            for state in (tied_later, tied_earlier, older):
+                store.save(state)
+
+            first_page = store.recent(limit=2)
+            second_page = store.recent(limit=2, offset=2)
+
+            self.assertEqual(
+                [(state.profile_id, state.session_id) for state in first_page],
+                [("bot:a", "session:a"), ("bot:z", "session:z")],
+            )
+            self.assertEqual(
+                [(state.profile_id, state.session_id) for state in second_page],
+                [("bot:old", "session:old")],
+            )
+
+    def test_recent_rejects_invalid_pagination(self) -> None:
+        store = StateStore("unused")
+
+        for limit, offset in ((0, 0), (-1, 0), (True, 0), (1, -1), (1, True)):
+            with self.subTest(limit=limit, offset=offset), self.assertRaises(ValueError):
+                store.recent(limit, offset)
+
+
+class SessionSummaryTests(unittest.TestCase):
+    def test_projection_is_bounded_and_contains_only_navigation_metadata(self) -> None:
+        state = AffectState.initial("p" * 300, "s" * 300)
+        state.updated_at = "t" * 120
+        state.revision = -4
+        state.model_version = -2
+        state.mood = "m" * 120
+        state.response_posture = "r" * 120
+        state.audit_records = [{"private": "secret"}]
+        state.soul_sha256 = "hash"
+
+        summary = session_summary(state)
+        typed_summary: SessionCatalogResponse = {
+            "items": [summary],
+            "limit": 50,
+            "offset": 0,
+            "has_more": False,
+        }
+
+        self.assertEqual(set(summary), {
+            "profile_id",
+            "session_id",
+            "updated_at",
+            "revision",
+            "mood",
+            "response_posture",
+            "model_version",
+        })
+        self.assertEqual(len(summary["profile_id"]), 200)
+        self.assertEqual(len(summary["session_id"]), 200)
+        self.assertEqual(len(summary["updated_at"]), 80)
+        self.assertEqual(len(summary["mood"]), 80)
+        self.assertEqual(summary["revision"], 0)
+        self.assertEqual(summary["model_version"], 0)
+        self.assertNotIn("secret", json.dumps(typed_summary))
 
     def test_service_returns_explicit_empty_state(self) -> None:
         class EmptyReader:
