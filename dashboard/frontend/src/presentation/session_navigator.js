@@ -30,10 +30,11 @@ feature.presentationSessionNavigator = (function () {
     );
   }
 
-  function sessionRow(session, selected, onSelect) {
+  function sessionRow(session, selected, onSelect, rowKey) {
     return e(
       "button",
       {
+        key: rowKey,
         type: "button",
         className: "ha-session-row" + (selected ? " ha-session-row--selected" : ""),
         "aria-pressed": selected,
@@ -81,7 +82,8 @@ feature.presentationSessionNavigator = (function () {
     );
   }
 
-  function sessionNavigator(model) {
+  function SessionNavigator(props) {
+    const model = props.model;
     const queryPair = SDK.hooks.useState("");
     const query = queryPair[0];
     const setQuery = queryPair[1];
@@ -174,7 +176,8 @@ feature.presentationSessionNavigator = (function () {
                   return sessionRow(
                     session,
                     sessionIsSelected(model.selection, session),
-                    model.selectSession
+                    model.selectSession,
+                    JSON.stringify([session.profileId, session.sessionId])
                   );
                 })
               );
@@ -200,5 +203,5 @@ feature.presentationSessionNavigator = (function () {
     );
   }
 
-  return { sessionNavigator: sessionNavigator };
+  return { SessionNavigator: SessionNavigator };
 })();

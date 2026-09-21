@@ -54,7 +54,6 @@ def _validate_selection(profile_id: str | None, session_id: str | None) -> None:
         )
 
 
-@router.get("/state")
 async def get_current_state(
     profile_id: str | None = Query(default=None, min_length=1, max_length=200),
     session_id: str | None = Query(default=None, min_length=1, max_length=200),
@@ -70,7 +69,6 @@ async def get_current_state(
     return response
 
 
-@router.get("/sessions")
 async def get_sessions(
     limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
     offset: int = Query(default=0, ge=0),
@@ -82,3 +80,8 @@ async def get_sessions(
         raise HTTPException(
             status_code=422, detail="Invalid session catalog pagination"
         ) from error
+
+
+if _FEATURE_ENABLED:
+    router.get("/state")(get_current_state)
+    router.get("/sessions")(get_sessions)

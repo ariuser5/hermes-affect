@@ -11,6 +11,8 @@ DIST_ROOT = DASHBOARD_ROOT / "dist"
 SOURCE_FILES = (
     SOURCE_ROOT / "domain" / "state.js",
     SOURCE_ROOT / "infrastructure" / "api.js",
+    SOURCE_ROOT / "application" / "state_polling.js",
+    SOURCE_ROOT / "application" / "session_catalog.js",
     SOURCE_ROOT / "application" / "state_controller.js",
     SOURCE_ROOT / "presentation" / "primitives.js",
     SOURCE_ROOT / "presentation" / "state_view.js",

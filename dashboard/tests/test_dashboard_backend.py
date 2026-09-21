@@ -353,15 +353,23 @@ class PluginApiAdapterTests(unittest.TestCase):
     def test_adapter_exports_only_read_only_state_route(self) -> None:
         module = self._load_adapter(enabled="0")
 
-        self.assertEqual(
-            [path for path, _ in module.router.routes], ["/state", "/sessions"]
-        )
+        self.assertEqual([path for path, _ in module.router.routes], [])
         with self.assertRaises(module.HTTPException) as raised:
             asyncio.run(module.get_current_state())
         self.assertEqual(raised.exception.status_code, 404)
         with self.assertRaises(module.HTTPException) as raised:
-            asyncio.run(module.get_sessions())
+            asyncio.run(module.get_current_state(profile_id="", session_id="bad"))
         self.assertEqual(raised.exception.status_code, 404)
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.get_sessions(limit=0))
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_enabled_adapter_registers_both_read_only_routes(self) -> None:
+        module = self._load_adapter(enabled="1")
+
+        self.assertEqual(
+            [path for path, _ in module.router.routes], ["/state", "/sessions"]
+        )
 
     def test_enabled_adapter_returns_service_response(self) -> None:
         module = self._load_adapter(enabled="1")

@@ -88,7 +88,10 @@ dashboard/
 │       └── state_reader.py                # StateStore-backed read adapter
 ├── frontend/
 │   ├── src/
-│   │   ├── application/                  # polling and view-model orchestration
+│   │   ├── application/                  # focused polling/catalog orchestration
+│   │   │   ├── state_polling.js
+│   │   │   ├── session_catalog.js
+│   │   │   └── state_controller.js
 │   │   ├── domain/                       # scales, labels, state validation
 │   │   ├── infrastructure/               # authenticated API client
 │   │   ├── presentation/                 # navigator, state view, and styles

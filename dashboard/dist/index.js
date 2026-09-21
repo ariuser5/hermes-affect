@@ -266,9 +266,8 @@ feature.infrastructure = (function () {
   return { loadState: loadState, loadSessions: loadSessions };
 })();
 
-feature.application = (function () {
+feature.statePolling = (function () {
   const POLL_INTERVAL_MS = 5000;
-  const DEFAULT_PAGE_SIZE = 50;
 
   function isCurrentRequest(generation, activeGeneration, requestSelection, selection) {
     return (
@@ -277,98 +276,133 @@ feature.application = (function () {
     );
   }
 
-  function responseMatchesSelection(response, selection) {
-    if (!response || response.available !== true || !response.state) return false;
-    if (selection.mode === "latest") return true;
-    return (
-      response.state.profileId === selection.profileId &&
-      response.state.sessionId === selection.sessionId
-    );
+  function acceptStateSuccess(current, request, activeRequest, raw) {
+    if (
+      !isCurrentRequest(
+        request.generation,
+        activeRequest.generation,
+        request.selection,
+        activeRequest.selection
+      )
+    ) {
+      return current;
+    }
+    const response = feature.domain.normalizeResponse(raw);
+    return {
+      response: response,
+      responseSelection: request.selection,
+      selectedStateError:
+        request.selection.mode === "exact" && !response.available
+          ? { kind: "unavailable" }
+          : null,
+      errorSelection:
+        request.selection.mode === "exact" && !response.available ? request.selection : null,
+      hasError: false,
+    };
   }
 
-  function useDashboardState(initialResponse) {
-    const responsePair = SDK.hooks.useState(initialResponse);
-    const response = responsePair[0];
-    const setResponse = responsePair[1];
-    const selectionPair = SDK.hooks.useState(feature.domain.latestSelection());
-    const selection = selectionPair[0];
-    const setSelection = selectionPair[1];
-    const errorPair = SDK.hooks.useState(false);
-    const hasError = errorPair[0];
-    const setHasError = errorPair[1];
-    const selectedErrorPair = SDK.hooks.useState(null);
-    const selectedStateError = selectedErrorPair[0];
-    const setSelectedStateError = selectedErrorPair[1];
+  function acceptStateFailure(current, request, activeRequest) {
+    if (
+      !isCurrentRequest(
+        request.generation,
+        activeRequest.generation,
+        request.selection,
+        activeRequest.selection
+      )
+    ) {
+      return current;
+    }
+    return {
+      response: current.response,
+      responseSelection: current.responseSelection,
+      selectedStateError:
+        request.selection.mode === "exact" ? { kind: "unavailable" } : null,
+      errorSelection: request.selection,
+      hasError: request.selection.mode !== "exact",
+    };
+  }
+
+  function deriveStateView(current, selection, loading) {
+    const matches =
+      current.response &&
+      current.response.available === true &&
+      feature.domain.sameSelection(current.responseSelection, selection);
+    const hasActiveError =
+      current.selectedStateError &&
+      feature.domain.sameSelection(current.errorSelection, selection);
+    return {
+      hasMatchingResponse: Boolean(matches && !hasActiveError),
+      selectedStateError: hasActiveError ? current.selectedStateError : null,
+      hasError: Boolean(current.hasError && selection.mode === "latest" && !hasActiveError),
+      selectedStateLoading: Boolean(
+        !hasActiveError &&
+          (loading ||
+            (selection.mode === "exact" && !matches) ||
+            (selection.mode === "latest" && current.response && current.response.available && !matches))
+      ),
+    };
+  }
+
+  function shouldPollImmediately(selection, mounted) {
+    return selection.mode === "exact" || mounted;
+  }
+
+  function useSelectedState(initialResponse, selection) {
+    const initialState = {
+      response: initialResponse,
+      responseSelection: feature.domain.latestSelection(),
+      selectedStateError: null,
+      errorSelection: null,
+      hasError: false,
+    };
+    const statePair = SDK.hooks.useState(initialState);
+    const state = statePair[0];
+    const setState = statePair[1];
     const loadingPair = SDK.hooks.useState(false);
-    const selectedStateLoading = loadingPair[0];
-    const setSelectedStateLoading = loadingPair[1];
-    const catalogPair = SDK.hooks.useState({
-      items: [],
-      limit: DEFAULT_PAGE_SIZE,
-      offset: 0,
-      hasMore: false,
-    });
-    const catalog = catalogPair[0];
-    const setCatalog = catalogPair[1];
-    const catalogLoadingPair = SDK.hooks.useState(false);
-    const catalogLoading = catalogLoadingPair[0];
-    const setCatalogLoading = catalogLoadingPair[1];
-    const catalogErrorPair = SDK.hooks.useState(null);
-    const catalogError = catalogErrorPair[0];
-    const setCatalogError = catalogErrorPair[1];
-    const stateGeneration = SDK.hooks.useRef(0);
-    const stateMounted = SDK.hooks.useRef(false);
-    const catalogGeneration = SDK.hooks.useRef(0);
+    const loading = loadingPair[0];
+    const setLoading = loadingPair[1];
+    const generationRef = SDK.hooks.useRef(0);
+    const mountedRef = SDK.hooks.useRef(false);
 
     SDK.hooks.useEffect(
       function () {
         let cancelled = false;
         let timer = null;
-        const requestSelection = selection;
-        const generation = stateGeneration.current + 1;
-        stateGeneration.current = generation;
+        const request = {
+          generation: generationRef.current + 1,
+          selection: selection,
+        };
+        generationRef.current = request.generation;
+        const activeRequest = request;
+        const pollImmediately = shouldPollImmediately(request.selection, mountedRef.current);
+        mountedRef.current = true;
+        setLoading(pollImmediately);
+        setState(function (current) {
+          return { ...current, selectedStateError: null, errorSelection: null, hasError: false };
+        });
 
         async function poll() {
-          setSelectedStateLoading(true);
           try {
-            const raw = await feature.infrastructure.loadState(requestSelection);
-            if (
-              !cancelled &&
-              isCurrentRequest(generation, stateGeneration.current, requestSelection, selection)
-            ) {
-              const normalized = feature.domain.normalizeResponse(raw);
-              setResponse(normalized);
-              setHasError(false);
-              setSelectedStateError(
-                requestSelection.mode === "exact" && !normalized.available
-                  ? { kind: "unavailable" }
-                  : null
-              );
+            const raw = await feature.infrastructure.loadState(request.selection);
+            if (!cancelled && request.generation === generationRef.current) {
+              setState(function (current) {
+                return acceptStateSuccess(current, request, activeRequest, raw);
+              });
             }
           } catch (_error) {
-            if (
-              !cancelled &&
-              isCurrentRequest(generation, stateGeneration.current, requestSelection, selection)
-            ) {
-              if (requestSelection.mode === "exact") {
-                setSelectedStateError({ kind: "unavailable" });
-              } else {
-                setHasError(true);
-              }
+            if (!cancelled && request.generation === generationRef.current) {
+              setState(function (current) {
+                return acceptStateFailure(current, request, activeRequest);
+              });
             }
           } finally {
-            if (
-              !cancelled &&
-              isCurrentRequest(generation, stateGeneration.current, requestSelection, selection)
-            ) {
-              setSelectedStateLoading(false);
+            if (!cancelled && request.generation === generationRef.current) {
+              setLoading(false);
               timer = window.setTimeout(poll, POLL_INTERVAL_MS);
             }
           }
         }
 
-        const pollImmediately = requestSelection.mode === "exact" || stateMounted.current;
-        stateMounted.current = true;
         if (pollImmediately) {
           poll();
         } else {
@@ -382,71 +416,122 @@ feature.application = (function () {
       [selection.mode, selection.profileId, selection.sessionId]
     );
 
-    async function loadCatalogPage(replace) {
+    const view = deriveStateView(state, selection, loading);
+    return {
+      response: state.response,
+      hasError: view.hasError,
+      selectedStateError: view.selectedStateError,
+      selectedStateLoading: view.selectedStateLoading,
+      hasMatchingResponse: view.hasMatchingResponse,
+    };
+  }
+
+  return {
+    isCurrentRequest: isCurrentRequest,
+    acceptStateSuccess: acceptStateSuccess,
+    acceptStateFailure: acceptStateFailure,
+    deriveStateView: deriveStateView,
+    shouldPollImmediately: shouldPollImmediately,
+    useSelectedState: useSelectedState,
+  };
+})();
+
+feature.sessionCatalog = (function () {
+  const DEFAULT_PAGE_SIZE = 50;
+
+  function useSessionCatalog() {
+    const catalogPair = SDK.hooks.useState({
+      items: [],
+      limit: DEFAULT_PAGE_SIZE,
+      offset: 0,
+      hasMore: false,
+    });
+    const catalog = catalogPair[0];
+    const setCatalog = catalogPair[1];
+    const loadingPair = SDK.hooks.useState(false);
+    const catalogLoading = loadingPair[0];
+    const setCatalogLoading = loadingPair[1];
+    const errorPair = SDK.hooks.useState(null);
+    const catalogError = errorPair[0];
+    const setCatalogError = errorPair[1];
+    const generationRef = SDK.hooks.useRef(0);
+
+    async function loadPage(replace) {
       if (!replace && (!catalog.hasMore || catalogLoading)) return;
-      const requestId = catalogGeneration.current + 1;
-      catalogGeneration.current = requestId;
+      const requestId = generationRef.current + 1;
+      generationRef.current = requestId;
       const offset = replace ? 0 : catalog.items.length;
       setCatalogLoading(true);
       if (replace) setCatalogError(null);
       try {
         const raw = await feature.infrastructure.loadSessions(DEFAULT_PAGE_SIZE, offset);
-        if (requestId !== catalogGeneration.current) return;
+        if (requestId !== generationRef.current) return;
         const page = feature.domain.normalizeCatalogResponse(raw);
         setCatalog(function (current) {
           return replace ? page : feature.domain.mergeCatalogPages(current, page);
         });
         setCatalogError(null);
       } catch (_error) {
-        if (requestId === catalogGeneration.current) {
+        if (requestId === generationRef.current) {
           setCatalogError("Session list is temporarily unavailable.");
         }
       } finally {
-        if (requestId === catalogGeneration.current) setCatalogLoading(false);
+        if (requestId === generationRef.current) setCatalogLoading(false);
       }
     }
 
     SDK.hooks.useEffect(function () {
-      loadCatalogPage(true);
+      loadPage(true);
     }, []);
 
-    function selectSession(summary) {
-      setSelection(feature.domain.exactSelection(summary.profileId, summary.sessionId));
-      setSelectedStateError(null);
-      setHasError(false);
-    }
-
-    function returnToLatest() {
-      setSelection(feature.domain.latestSelection());
-      setResponse({ available: false, state: null });
-      setSelectedStateLoading(true);
-      setSelectedStateError(null);
-      setHasError(false);
-    }
-
-    function refreshSessions() {
-      return loadCatalogPage(true);
-    }
-
-    function loadMoreSessions() {
-      return loadCatalogPage(false);
-    }
-
     return {
-      response: response,
-      hasError: hasError,
-      selection: selection,
       sessions: catalog.items,
       catalog: catalog,
       catalogLoading: catalogLoading,
       catalogError: catalogError,
-      selectedStateLoading: selectedStateLoading,
-      selectedStateError: selectedStateError,
-      hasMatchingResponse: responseMatchesSelection(response, selection),
+      refreshSessions: function () {
+        return loadPage(true);
+      },
+      loadMoreSessions: function () {
+        return loadPage(false);
+      },
+    };
+  }
+
+  return { useSessionCatalog: useSessionCatalog };
+})();
+
+feature.application = (function () {
+  function useDashboardState(initialResponse) {
+    const selectionPair = SDK.hooks.useState(feature.domain.latestSelection());
+    const selection = selectionPair[0];
+    const setSelection = selectionPair[1];
+    const state = feature.statePolling.useSelectedState(initialResponse, selection);
+    const catalog = feature.sessionCatalog.useSessionCatalog();
+
+    function selectSession(summary) {
+      setSelection(feature.domain.exactSelection(summary.profileId, summary.sessionId));
+    }
+
+    function returnToLatest() {
+      setSelection(feature.domain.latestSelection());
+    }
+
+    return {
+      response: state.response,
+      hasError: state.hasError,
+      selection: selection,
+      sessions: catalog.sessions,
+      catalog: catalog.catalog,
+      catalogLoading: catalog.catalogLoading,
+      catalogError: catalog.catalogError,
+      selectedStateLoading: state.selectedStateLoading,
+      selectedStateError: state.selectedStateError,
+      hasMatchingResponse: state.hasMatchingResponse,
       selectSession: selectSession,
       returnToLatest: returnToLatest,
-      refreshSessions: refreshSessions,
-      loadMoreSessions: loadMoreSessions,
+      refreshSessions: catalog.refreshSessions,
+      loadMoreSessions: catalog.loadMoreSessions,
     };
   }
 
@@ -463,12 +548,7 @@ feature.application = (function () {
     }
   }
 
-  return {
-    useDashboardState: useDashboardState,
-    isCurrentRequest: isCurrentRequest,
-    responseMatchesSelection: responseMatchesSelection,
-    bootstrap: bootstrap,
-  };
+  return { useDashboardState: useDashboardState, bootstrap: bootstrap };
 })();
 
 feature.presentationPrimitives = (function () {
@@ -777,10 +857,11 @@ feature.presentationSessionNavigator = (function () {
     );
   }
 
-  function sessionRow(session, selected, onSelect) {
+  function sessionRow(session, selected, onSelect, rowKey) {
     return e(
       "button",
       {
+        key: rowKey,
         type: "button",
         className: "ha-session-row" + (selected ? " ha-session-row--selected" : ""),
         "aria-pressed": selected,
@@ -828,7 +909,8 @@ feature.presentationSessionNavigator = (function () {
     );
   }
 
-  function sessionNavigator(model) {
+  function SessionNavigator(props) {
+    const model = props.model;
     const queryPair = SDK.hooks.useState("");
     const query = queryPair[0];
     const setQuery = queryPair[1];
@@ -921,7 +1003,8 @@ feature.presentationSessionNavigator = (function () {
                   return sessionRow(
                     session,
                     sessionIsSelected(model.selection, session),
-                    model.selectSession
+                    model.selectSession,
+                    JSON.stringify([session.profileId, session.sessionId])
                   );
                 })
               );
@@ -947,7 +1030,7 @@ feature.presentationSessionNavigator = (function () {
     );
   }
 
-  return { sessionNavigator: sessionNavigator };
+  return { SessionNavigator: SessionNavigator };
 })();
 
 feature.presentation = (function () {
@@ -995,7 +1078,7 @@ feature.presentation = (function () {
       return e(
         "div",
         { className: "ha-page" },
-        navigator.sessionNavigator(model),
+        e(navigator.SessionNavigator, { model: model }),
         e("main", { className: "ha-state-column" }, stateContent)
       );
     };

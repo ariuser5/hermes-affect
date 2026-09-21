@@ -43,7 +43,7 @@ feature.presentation = (function () {
       return e(
         "div",
         { className: "ha-page" },
-        navigator.sessionNavigator(model),
+        e(navigator.SessionNavigator, { model: model }),
         e("main", { className: "ha-state-column" }, stateContent)
       );
     };

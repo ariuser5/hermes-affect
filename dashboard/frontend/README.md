@@ -6,7 +6,7 @@ for deployment but must not be edited in place.
 
 ```text
 frontend/src/
-├── application/      # non-overlapping polling, cancellation, stale state
+├── application/      # focused state polling, catalog, and composition
 ├── domain/           # response normalization, bounds, scales, labels
 ├── infrastructure/   # authenticated Hermes dashboard API client
 ├── presentation/     # navigator, state view, SDK components, and styles
