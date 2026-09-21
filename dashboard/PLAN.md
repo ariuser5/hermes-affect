@@ -6,7 +6,7 @@ criterion is completed.
 
 ## Current checkpoint
 
-Checkpoint date: 2026-09-19.
+Checkpoint date: 2026-09-21.
 
 - [x] Create an isolated dashboard feature directory.
 - [x] Record the native Hermes dashboard-extension architecture.
@@ -23,6 +23,10 @@ Checkpoint date: 2026-09-19.
 - [ ] Smoke-test the packaged extension in the pinned Hermes image.
 - [ ] Propose or apply the separate Docker configuration change only with
       explicit authorization.
+- [x] Record the requested retained-session navigation design in
+      [`SESSION_NAVIGATION_PLAN.md`](SESSION_NAVIGATION_PLAN.md).
+- [ ] Implement retained-session navigation; no source implementation exists at
+      this checkpoint.
 
 Source behavior is implemented, but no Docker configuration, deployed Hermes
 configuration, or Raspberry Pi state was changed at this checkpoint. The
@@ -46,6 +50,10 @@ checked-in extension remains inaccessible unless it is installed in Hermes and
    requires a separately reviewed bounded history model.
 9. Keep Hermes compatibility code at the dashboard adapter boundary and avoid
    private Hermes imports in the feature's domain or application layers.
+10. Preserve latest-state behavior on first open, while allowing an explicit
+    profile/session selection to remain pinned during polling. The detailed
+    implementation handoff is in
+    [`SESSION_NAVIGATION_PLAN.md`](SESSION_NAVIGATION_PLAN.md).
 
 ## Target layout
 

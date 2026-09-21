@@ -63,6 +63,10 @@ influence designs; old checkmarks do not assert those old interfaces remain.
       it.
 - [ ] Propose and review the separate Docker/Compose feature flag change; do
       not modify or deploy infrastructure without explicit authorization.
+- [x] Plan retained-session navigation with exact selection, bounded catalog
+      pagination, responsive UI, privacy constraints, tests, and clean-code
+      boundaries in `dashboard/SESSION_NAVIGATION_PLAN.md`.
+- [ ] Implement retained-session navigation phase-by-phase from that plan.
 
 Acceptance criteria:
 
