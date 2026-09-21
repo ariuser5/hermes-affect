@@ -30,10 +30,12 @@ state.
 
 The page opens in **Latest session** mode and polls the latest valid state
 visible in the current container every five seconds. It also provides a
-bounded retained-session navigator, grouped by profile, with exact
-profile/session selection, refresh, load-more pagination, and a loaded-session
-filter. Exact selections remain pinned while polling; if retention removes one,
-the page reports it as unavailable instead of switching silently.
+bounded retained-session dropdown, grouped by profile, with exact
+profile/session selection, refresh, and load-more pagination. Long session IDs
+are shortened inside the options while the complete selected profile/session
+identity remains visible beside the selector. Exact selections remain pinned
+while polling; if retention removes one, the page reports it as unavailable
+instead of switching silently.
 
 The state view shows mood, posture, freshness, expression drive, perceived
 atmosphere, affect values, relationships, active sensitivities, open conflicts,

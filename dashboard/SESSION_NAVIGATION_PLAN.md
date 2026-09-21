@@ -11,8 +11,8 @@ Plan date: 2026-09-21.
 
 When the Affect tab opens, it continues to display the newest valid affect
 state available inside the current Hermes container. The page also provides a
-session navigator so an authenticated dashboard user can select a retained
-session and inspect that session's persisted affect snapshot.
+compact session selector so an authenticated dashboard user can select a
+retained session and inspect that session's persisted affect snapshot.
 
 The selected session is a snapshot selector, not a timeline. Historical charts,
 cross-container aggregation, and state mutation remain out of scope.
@@ -20,11 +20,14 @@ cross-container aggregation, and state mutation remain out of scope.
 ## Required behavior
 
 1. Open the Affect tab in **Latest session** mode, preserving today's behavior.
-2. Show a navigation area containing retained valid sessions, newest first.
+2. Show a compact native dropdown containing retained valid sessions, newest
+   first.
 3. Group or label entries by profile so the UI remains correct if one container
    can see more than one profile.
-4. Show only useful summary metadata in the navigator: profile ID, session ID,
-   update age/time, revision, mood, posture, and model version.
+4. Keep the native selector concise: each option identifies the profile and
+   session, with the complete selected profile/session identity shown near the
+   control. Detailed state metadata remains in the affect-state view rather
+   than being forced into native option labels.
 5. Selecting an entry loads the existing safe-state projection for that exact
    profile/session pair.
 6. Keep polling the selected session without switching it to another session.
@@ -34,9 +37,9 @@ cross-container aggregation, and state mutation remain out of scope.
    **Latest session**. Do not silently display a different session.
 8. Refresh the session catalog on initial mount and from an explicit refresh
    control. Do not add another aggressive background scan.
-9. On narrow screens, present the navigator as a compact selector or drawer
-   above the state view. On wider screens, use a restrained sidebar or split
-   layout without shrinking the existing cards excessively.
+9. Present the native selector in normal document flow above the state view at
+   every width. It must be full-width on narrow screens, with no sticky or
+   overlay layout and no horizontal overflow.
 10. A browser reload returns to **Latest session** mode for this first version.
     URL deep links and persisted browser selection are deferred.
 
@@ -190,19 +193,20 @@ not become a giant file:
 frontend/src/presentation/
 ├── primitives.js          # cards, badges, metric bars, chips
 ├── state_view.js          # mood core and affect-state sections
-├── session_navigator.js   # latest item, session list, refresh/load-more UI
+├── session_navigator.js   # native selector, refresh/load-more UI
 ├── page.js                # layout and composition only
 └── style.css
 ```
 
 Recommended navigation behavior:
 
-- **Latest session** is the first and visually distinct entry.
-- The selected entry has an accessible active state, not color alone.
-- Each session row shows a shortened visual ID while retaining the complete ID
-  in a safe title/label.
-- A lightweight client-side filter may search the currently loaded summaries
-  by profile or session ID; it must not imply that unloaded pages were searched.
+- **Latest session** is the first option and the default selection.
+- Retained sessions use profile-labeled `<optgroup>` elements, and each option
+  encodes both profile ID and session ID.
+- Each option may show a shortened session ID while the complete selected
+  profile/session identity remains visible beside the selector.
+- Refresh and Load more remain separate controls next to or immediately below
+  the selector; no client-side filter is needed for the native control.
 - Loading a selection should preserve the current layout and show a localized
   loading state rather than blanking the entire plugin page.
 - Keyboard navigation, focus visibility, readable contrast, and reduced-motion
@@ -294,7 +298,8 @@ Checkpoint: controller behavior is testable without rendering React.
 
 - [x] Split reusable presentation primitives and the state view out of the
       current `page.js` before adding navigation.
-- [x] Implement the responsive session navigator and active-selection states.
+- [x] Implement the responsive native session selector and active-selection
+      states in normal document flow above the state view.
 - [x] Add explicit exact-session loading, unavailable, and return-to-latest
       behavior.
 - [x] Preserve the existing visual language and narrow-screen usability.

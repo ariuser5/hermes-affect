@@ -827,11 +827,33 @@ feature.presentationStateView = (function () {
 
 feature.presentationSessionNavigator = (function () {
   const e = SDK.React.createElement;
-  const primitives = feature.presentationPrimitives;
+  const LATEST_OPTION = "latest";
 
   function shortId(value) {
     if (value.length <= 28) return value;
     return value.slice(0, 12) + "…" + value.slice(-12);
+  }
+
+  function optionValue(profileId, sessionId) {
+    return JSON.stringify([profileId, sessionId]);
+  }
+
+  function selectionFromOption(value) {
+    if (value === LATEST_OPTION) return feature.domain.latestSelection();
+    try {
+      const pair = JSON.parse(value);
+      if (
+        Array.isArray(pair) &&
+        pair.length === 2 &&
+        typeof pair[0] === "string" &&
+        typeof pair[1] === "string"
+      ) {
+        return feature.domain.exactSelection(pair[0], pair[1]);
+      }
+    } catch (_error) {
+      return feature.domain.latestSelection();
+    }
+    return feature.domain.latestSelection();
   }
 
   function groupsFor(sessions) {
@@ -849,98 +871,124 @@ feature.presentationSessionNavigator = (function () {
     return groups;
   }
 
-  function sessionIsSelected(selection, session) {
-    return (
-      selection.mode === "exact" &&
-      selection.profileId === session.profileId &&
-      selection.sessionId === session.sessionId
+  function selectedValue(selection) {
+    return selection.mode === "exact"
+      ? optionValue(selection.profileId, selection.sessionId)
+      : LATEST_OPTION;
+  }
+
+  function selectedIdentity(selection) {
+    return selection.mode === "exact"
+      ? selection.profileId + " / " + selection.sessionId
+      : "Latest session";
+  }
+
+  function groupsWithSelection(groups, selection, selectedStateError) {
+    const result = groups.map(function (group) {
+      return { profileId: group.profileId, items: group.items.slice() };
+    });
+    if (selection.mode !== "exact") return result;
+
+    let selectedGroup = result.find(function (group) {
+      return group.profileId === selection.profileId;
+    });
+    if (!selectedGroup) {
+      selectedGroup = { profileId: selection.profileId, items: [] };
+      result.push(selectedGroup);
+    }
+    const hasSelectedSession = selectedGroup.items.some(function (session) {
+      return session.sessionId === selection.sessionId;
+    });
+    if (!hasSelectedSession) {
+      selectedGroup.items.push({
+        profileId: selection.profileId,
+        sessionId: selection.sessionId,
+        unavailable: Boolean(selectedStateError),
+      });
+    }
+    return result;
+  }
+
+  function sessionOption(session) {
+    const identity = session.profileId + " / " + session.sessionId;
+    const props = {
+      key: optionValue(session.profileId, session.sessionId),
+      value: optionValue(session.profileId, session.sessionId),
+      title: identity,
+    };
+    if (session.unavailable) props.disabled = true;
+    return e(
+      "option",
+      props,
+      session.profileId + " / " + shortId(session.sessionId) + (session.unavailable ? " (unavailable)" : "")
     );
   }
 
-  function sessionRow(session, selected, onSelect, rowKey) {
+  function sessionOptions(groups) {
+    return [
+      e("option", { key: LATEST_OPTION, value: LATEST_OPTION }, "Latest session"),
+    ].concat(
+      groups.map(function (group) {
+        return e(
+          "optgroup",
+          { key: group.profileId, label: group.profileId },
+          group.items.map(sessionOption)
+        );
+      })
+    );
+  }
+
+  function handleSelectionChange(model, event) {
+    const selection = selectionFromOption(event.target.value);
+    if (selection.mode === "latest") {
+      model.returnToLatest();
+    } else {
+      model.selectSession(selection);
+    }
+  }
+
+  function navigatorHeader() {
     return e(
-      "button",
-      {
-        key: rowKey,
-        type: "button",
-        className: "ha-session-row" + (selected ? " ha-session-row--selected" : ""),
-        "aria-pressed": selected,
-        title: session.profileId + " / " + session.sessionId,
-        onClick: function () {
-          onSelect(session);
-        },
-      },
-      e("span", { className: "ha-session-row__marker", "aria-hidden": "true" }, selected ? "●" : "○"),
+      "div",
+      { className: "ha-session-navigator__header" },
       e(
-        "span",
-        { className: "ha-session-row__body" },
-        e("strong", null, shortId(session.sessionId)),
+        "div",
+        null,
+        e("div", { className: "ha-kicker" }, "Session navigator"),
+        e("h2", { id: "ha-session-navigator-title" }, "Affect state session"),
         e(
-          "span",
-          { className: "ha-session-row__meta" },
-          "Updated " + primitives.updatedLabel(session.updatedAt) + " · Rev " + session.revision
-        ),
-        e(
-          "span",
-          { className: "ha-session-row__meta" },
-          feature.domain.label(session.mood) + " · " + feature.domain.label(session.posture) + " · v" + session.modelVersion
+          "p",
+          { className: "ha-muted" },
+          "Choose Latest session or a retained profile/session snapshot."
         )
       )
     );
   }
 
-  function latestRow(model) {
-    const selected = model.selection.mode === "latest";
+  function selectorControls(model, groups) {
     return e(
-      "button",
-      {
-        type: "button",
-        className: "ha-session-latest" + (selected ? " ha-session-latest--selected" : ""),
-        "aria-pressed": selected,
-        onClick: model.returnToLatest,
-      },
-      e("span", { className: "ha-session-latest__marker", "aria-hidden": "true" }, selected ? "●" : "○"),
+      "div",
+      { className: "ha-session-controls" },
       e(
-        "span",
-        { className: "ha-session-row__body" },
-        e("strong", null, "Latest session"),
-        e("span", { className: "ha-session-row__meta" }, "Newest valid snapshot in this container")
-      )
-    );
-  }
-
-  function SessionNavigator(props) {
-    const model = props.model;
-    const queryPair = SDK.hooks.useState("");
-    const query = queryPair[0];
-    const setQuery = queryPair[1];
-    const normalizedQuery = query.trim().toLowerCase();
-    const filtered = model.sessions.filter(function (session) {
-      if (!normalizedQuery) return true;
-      return (
-        session.profileId.toLowerCase().includes(normalizedQuery) ||
-        session.sessionId.toLowerCase().includes(normalizedQuery)
-      );
-    });
-    const groups = groupsFor(filtered);
-    const selectedTarget =
-      model.selection.mode === "exact"
-        ? model.selection.profileId + " / " + model.selection.sessionId
-        : null;
-
-    return e(
-      "aside",
-      { className: "ha-session-navigator", "aria-label": "Affect session navigation" },
+        "label",
+        { className: "ha-session-selector", htmlFor: "ha-session-select" },
+        e("span", { className: "ha-session-selector__label" }, "Session"),
+        e(
+          "select",
+          {
+            id: "ha-session-select",
+            value: selectedValue(model.selection),
+            onChange: function (event) {
+              handleSelectionChange(model, event);
+            },
+            "aria-describedby": "ha-session-identity",
+          },
+          sessionOptions(groups)
+        )
+      ),
       e(
         "div",
-        { className: "ha-session-navigator__header" },
-        e(
-          "div",
-          null,
-          e("div", { className: "ha-kicker" }, "Session navigator"),
-          e("h2", null, "Retained snapshots"),
-          e("p", { className: "ha-muted" }, "Loaded sessions only; refresh to check for new entries.")
-        ),
+        { className: "ha-session-actions" },
         e(
           "button",
           {
@@ -950,87 +998,100 @@ feature.presentationSessionNavigator = (function () {
             disabled: model.catalogLoading,
           },
           model.catalogLoading ? "Refreshing…" : "Refresh"
-        )
-      ),
-      e("div", { className: "ha-session-navigator__latest" }, latestRow(model)),
-      e(
-        "label",
-        { className: "ha-session-search" },
-        e("span", null, "Filter loaded sessions"),
-        e("input", {
-          type: "search",
-          value: query,
-          placeholder: "Profile or session ID",
-          onChange: function (event) {
-            setQuery(event.target.value);
-          },
-        })
-      ),
-      selectedTarget
-        ? e(
-            "div",
-            { className: "ha-session-selection", role: "status" },
-            e("span", null, "Selected: " + shortId(selectedTarget)),
-            model.selectedStateLoading ? e("span", null, "Loading…") : null,
-            model.selectedStateError
-              ? e("span", { className: "ha-session-selection__error" }, "Unavailable")
-              : null,
-            e(
+        ),
+        model.catalog.hasMore
+          ? e(
               "button",
-              { type: "button", className: "ha-link-button", onClick: model.returnToLatest },
-              "Return to Latest session"
+              {
+                type: "button",
+                className: "ha-load-more",
+                onClick: model.loadMoreSessions,
+                disabled: model.catalogLoading,
+              },
+              model.catalogLoading ? "Loading…" : "Load more"
             )
-          )
-        : null,
-      model.catalogError
-        ? e(
-            "div",
-            { className: "ha-session-error", role: "alert" },
-            e("span", null, model.catalogError),
-            e("button", { type: "button", className: "ha-link-button", onClick: model.refreshSessions }, "Retry")
-          )
-        : null,
-      groups.length
-        ? e(
-            "div",
-            { className: "ha-session-groups" },
-            groups.map(function (group) {
-              return e(
-                "section",
-                { className: "ha-session-group", key: group.profileId },
-                e("h3", { title: group.profileId }, group.profileId),
-                group.items.map(function (session) {
-                  return sessionRow(
-                    session,
-                    sessionIsSelected(model.selection, session),
-                    model.selectSession,
-                    JSON.stringify([session.profileId, session.sessionId])
-                  );
-                })
-              );
-            })
-          )
-        : e(
-            "p",
-            { className: "ha-muted ha-session-navigator__empty" },
-            normalizedQuery ? "No loaded sessions match this filter." : "No retained sessions are available."
-          ),
-      model.catalog.hasMore
-        ? e(
-            "button",
-            {
-              type: "button",
-              className: "ha-load-more",
-              onClick: model.loadMoreSessions,
-              disabled: model.catalogLoading,
-            },
-            model.catalogLoading ? "Loading…" : "Load more sessions"
-          )
-        : null
+          : null
+      )
     );
   }
 
-  return { SessionNavigator: SessionNavigator };
+  function selectedSessionSummary(model) {
+    const identity = selectedIdentity(model.selection);
+    const selectionStatus = model.selectedStateError
+      ? e(
+          "p",
+          { className: "ha-session-status", role: "alert" },
+          "Selected session unavailable."
+        )
+      : model.selectedStateLoading
+        ? e(
+            "p",
+            { className: "ha-session-status", role: "status" },
+            "Loading selected session…"
+          )
+        : null;
+    return e(
+      "div",
+      { className: "ha-session-selection-meta" },
+      e(
+        "p",
+        { id: "ha-session-identity", className: "ha-session-identity", title: identity },
+        e("span", null, "Selected: "),
+        e("strong", null, identity)
+      ),
+      selectionStatus
+    );
+  }
+
+  function catalogError(model) {
+    if (!model.catalogError) return null;
+    return e(
+      "div",
+      { className: "ha-session-error", role: "alert" },
+      e("span", null, model.catalogError),
+      e(
+        "button",
+        { type: "button", className: "ha-link-button", onClick: model.refreshSessions },
+        "Retry"
+      )
+    );
+  }
+
+  function catalogEmpty(model) {
+    return !model.sessions.length
+      ? e("p", { className: "ha-muted ha-session-navigator__empty" }, "No retained sessions are available.")
+      : null;
+  }
+
+  function catalogFeedback(model) {
+    const error = catalogError(model);
+    const empty = catalogEmpty(model);
+    if (!error && !empty) return null;
+    return e("div", { className: "ha-session-catalog-feedback" }, error, empty);
+  }
+
+  function SessionNavigator(props) {
+    const model = props.model;
+    const groups = groupsWithSelection(
+      groupsFor(model.sessions),
+      model.selection,
+      model.selectedStateError
+    );
+    return e(
+      "section",
+      { className: "ha-session-navigator", "aria-labelledby": "ha-session-navigator-title" },
+      navigatorHeader(),
+      selectorControls(model, groups),
+      selectedSessionSummary(model),
+      catalogFeedback(model)
+    );
+  }
+
+  return {
+    SessionNavigator: SessionNavigator,
+    optionValue: optionValue,
+    selectionFromOption: selectionFromOption,
+  };
 })();
 
 feature.presentation = (function () {

@@ -32,7 +32,8 @@ Checkpoint date: 2026-09-21.
       reads and exact profile/session selection behind the existing feature
       gate.
 - [x] Complete the local implementation of Phases 3–5: controller selection
-      state, responsive navigator, generated assets, tests, and documentation.
+      state, responsive native session selector, generated assets, tests, and
+      documentation.
 - [ ] Complete live Hermes visual and packaged-extension smoke checks.
 
 The retained-session navigation implementation is complete locally, but live
