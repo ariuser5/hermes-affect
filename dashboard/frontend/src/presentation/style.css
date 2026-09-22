@@ -108,6 +108,13 @@
   background: var(--color-background);
   font: inherit;
   font-size: 0.78rem;
+  color-scheme: dark;
+}
+
+.ha-session-selector select option,
+.ha-session-selector select optgroup {
+  color: var(--color-foreground, #f5f7fa);
+  background-color: var(--color-card, var(--color-background, #1f2937));
 }
 
 .ha-session-actions {
