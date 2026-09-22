@@ -72,6 +72,31 @@ def _bounded_conflicts(state: AffectState) -> dict[str, dict[str, Any]]:
     return conflicts
 
 
+def _tuning_configuration(
+    state: AffectState, config: AffectConfig | None
+) -> dict[str, Any]:
+    if config is None:
+        return {"available": False, "configured": {}, "effective": {}, "overrides": {}}
+
+    configured, _warnings = validate_config(state.predisposition)
+    return {
+        "available": True,
+        "configured": {
+            name: configured.tuning[name]
+            for name in TUNING_FIELDS
+            if name in configured.tuning
+        },
+        "effective": {
+            name: config.tuning[name] for name in TUNING_FIELDS if name in config.tuning
+        },
+        "overrides": {
+            name: state.tuning_overrides[name]
+            for name in TUNING_FIELDS
+            if name in state.tuning_overrides
+        },
+    }
+
+
 def state_snapshot(state: AffectState, config: AffectConfig | None) -> dict[str, Any]:
     """Return the public current-state projection, excluding histories and internals."""
 
@@ -101,4 +126,5 @@ def state_snapshot(state: AffectState, config: AffectConfig | None) -> dict[str,
         "tuning_overrides": {
             name: value for name, value in state.tuning_overrides.items() if name in TUNING_FIELDS
         },
+        "tuning_configuration": _tuning_configuration(state, config),
     }

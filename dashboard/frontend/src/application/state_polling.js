@@ -95,11 +95,13 @@ feature.statePolling = (function () {
     const setLoading = loadingPair[1];
     const generationRef = SDK.hooks.useRef(0);
     const mountedRef = SDK.hooks.useRef(false);
+    const refreshRef = SDK.hooks.useRef(null);
 
     SDK.hooks.useEffect(
       function () {
         let cancelled = false;
         let timer = null;
+        let inFlight = false;
         const request = {
           generation: generationRef.current + 1,
           selection: selection,
@@ -114,6 +116,7 @@ feature.statePolling = (function () {
         });
 
         async function poll() {
+          inFlight = true;
           try {
             const raw = await feature.infrastructure.loadState(request.selection);
             if (!cancelled && request.generation === generationRef.current) {
@@ -128,12 +131,25 @@ feature.statePolling = (function () {
               });
             }
           } finally {
+            inFlight = false;
             if (!cancelled && request.generation === generationRef.current) {
               setLoading(false);
+              if (timer !== null) window.clearTimeout(timer);
               timer = window.setTimeout(poll, POLL_INTERVAL_MS);
             }
           }
         }
+
+        const refresh = function () {
+          if (timer !== null) {
+            window.clearTimeout(timer);
+            timer = null;
+          }
+          if (inFlight) return Promise.resolve();
+          setLoading(true);
+          return poll();
+        };
+        refreshRef.current = refresh;
 
         if (pollImmediately) {
           poll();
@@ -143,6 +159,7 @@ feature.statePolling = (function () {
         return function () {
           cancelled = true;
           if (timer !== null) window.clearTimeout(timer);
+          if (refreshRef.current === refresh) refreshRef.current = null;
         };
       },
       [selection.mode, selection.profileId, selection.sessionId]
@@ -155,6 +172,9 @@ feature.statePolling = (function () {
       selectedStateError: view.selectedStateError,
       selectedStateLoading: view.selectedStateLoading,
       hasMatchingResponse: view.hasMatchingResponse,
+      refreshNow: function () {
+        return refreshRef.current ? refreshRef.current() : Promise.resolve();
+      },
     };
   }
 

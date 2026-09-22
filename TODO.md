@@ -47,8 +47,8 @@ influence designs; old checkmarks do not assert those old interfaces remain.
       documentation.
 - [x] Extract one bounded safe-state projection shared with `/affect state`.
 - [x] Add a strict, default-off `HERMES_AFFECT_DASHBOARD` gate.
-- [x] Add a read-only native Hermes dashboard route for the latest valid state
-      visible inside one container.
+- [x] Add native Hermes dashboard state/catalog routes for valid state visible
+      inside one container, plus narrow authenticated session tuning routes.
 - [x] Add a conditional Affect tab, responsive current-state visualization,
       five-second non-overlapping polling, and empty/stale behavior.
 - [x] Add a deterministic dependency-free browser build and commit-ready
@@ -66,7 +66,8 @@ influence designs; old checkmarks do not assert those old interfaces remain.
 - [x] Plan retained-session navigation with exact selection, bounded catalog
       pagination, responsive UI, privacy constraints, tests, and clean-code
       boundaries in `dashboard/SESSION_NAVIGATION_PLAN.md`.
-- [ ] Implement retained-session navigation phase-by-phase from that plan;
+- [x] Implement retained-session navigation and session-scoped v2
+      `expression_gain` tuning phase-by-phase from the dashboard plans;
       local backend, controller, presentation, asset, test, and documentation
       phases are complete, while live Hermes visual and packaged-extension
       checks remain.
@@ -76,8 +77,9 @@ Acceptance criteria:
 - Affect processing remains independent from web enablement.
 - Disabled or invalid feature-gate values disclose no state and register no
   dashboard tab.
-- The route remains behind Hermes' dashboard authentication and publishes no
-  extra port or mutation method.
+- The routes remain behind Hermes' dashboard authentication and publish no
+  extra port; dashboard writes are limited to exact-session `expression_gain`
+  apply/restore operations.
 - One container exposes only its latest valid local state; cross-container
   aggregation and historical charts remain deferred.
 - Exact continuation status is maintained in `dashboard/PLAN.md`.

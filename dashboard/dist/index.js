@@ -39,6 +39,27 @@ feature.domain = (function () {
     return Object.entries(objectOrEmpty(value)).slice(-COLLECTION_LIMIT);
   }
 
+  function normalizeTuningConfiguration(raw) {
+    const configuration = objectOrEmpty(raw);
+    const configured = objectOrEmpty(configuration.configured);
+    const effective = objectOrEmpty(configuration.effective);
+    const overrides = objectOrEmpty(configuration.overrides);
+    const available = configuration.available === true;
+    return {
+      available: available,
+      configuredExpressionGain: available
+        ? finite(configured.expression_gain, 0, 10, 1)
+        : null,
+      effectiveExpressionGain: available
+        ? finite(effective.expression_gain, 0, 10, 1)
+        : null,
+      overrideExpressionGain:
+        available && Object.prototype.hasOwnProperty.call(overrides, "expression_gain")
+          ? finite(overrides.expression_gain, 0, 10, 1)
+          : null,
+    };
+  }
+
   function normalizeRelationship(participantId, raw) {
     const relation = objectOrEmpty(raw);
     return {
@@ -109,6 +130,7 @@ feature.domain = (function () {
         tuning: entries(state.tuning_overrides).map(function (entry) {
           return [text(entry[0], "unknown"), finite(entry[1], 0, 10, 0)];
         }),
+        tuningConfiguration: normalizeTuningConfiguration(state.tuning_configuration),
       },
     };
   }
@@ -230,6 +252,7 @@ feature.domain = (function () {
 
   return {
     normalizeResponse: normalizeResponse,
+    normalizeTuningConfiguration: normalizeTuningConfiguration,
     latestSelection: latestSelection,
     exactSelection: exactSelection,
     sameSelection: sameSelection,
@@ -245,6 +268,7 @@ feature.domain = (function () {
 feature.infrastructure = (function () {
   const ENDPOINT = "/api/plugins/hermes-affect/state";
   const SESSIONS_ENDPOINT = "/api/plugins/hermes-affect/sessions";
+  const TUNING_ENDPOINT = "/api/plugins/hermes-affect/tuning";
 
   function loadState(selection) {
     const params = new URLSearchParams();
@@ -263,7 +287,30 @@ feature.infrastructure = (function () {
     return SDK.fetchJSON(SESSIONS_ENDPOINT + "?" + params.toString());
   }
 
-  return { loadState: loadState, loadSessions: loadSessions };
+  function tuningQuery(target) {
+    const params = new URLSearchParams();
+    params.set("profile_id", target.profileId);
+    params.set("session_id", target.sessionId);
+    return params;
+  }
+
+  function setExpressionGain(target, value) {
+    const params = tuningQuery(target);
+    params.set("expression_gain", String(value));
+    return SDK.fetchJSON(TUNING_ENDPOINT + "?" + params.toString(), { method: "POST" });
+  }
+
+  function restoreExpressionGain(target) {
+    const params = tuningQuery(target);
+    return SDK.fetchJSON(TUNING_ENDPOINT + "?" + params.toString(), { method: "DELETE" });
+  }
+
+  return {
+    loadState: loadState,
+    loadSessions: loadSessions,
+    setExpressionGain: setExpressionGain,
+    restoreExpressionGain: restoreExpressionGain,
+  };
 })();
 
 feature.statePolling = (function () {
@@ -363,11 +410,13 @@ feature.statePolling = (function () {
     const setLoading = loadingPair[1];
     const generationRef = SDK.hooks.useRef(0);
     const mountedRef = SDK.hooks.useRef(false);
+    const refreshRef = SDK.hooks.useRef(null);
 
     SDK.hooks.useEffect(
       function () {
         let cancelled = false;
         let timer = null;
+        let inFlight = false;
         const request = {
           generation: generationRef.current + 1,
           selection: selection,
@@ -382,6 +431,7 @@ feature.statePolling = (function () {
         });
 
         async function poll() {
+          inFlight = true;
           try {
             const raw = await feature.infrastructure.loadState(request.selection);
             if (!cancelled && request.generation === generationRef.current) {
@@ -396,12 +446,25 @@ feature.statePolling = (function () {
               });
             }
           } finally {
+            inFlight = false;
             if (!cancelled && request.generation === generationRef.current) {
               setLoading(false);
+              if (timer !== null) window.clearTimeout(timer);
               timer = window.setTimeout(poll, POLL_INTERVAL_MS);
             }
           }
         }
+
+        const refresh = function () {
+          if (timer !== null) {
+            window.clearTimeout(timer);
+            timer = null;
+          }
+          if (inFlight) return Promise.resolve();
+          setLoading(true);
+          return poll();
+        };
+        refreshRef.current = refresh;
 
         if (pollImmediately) {
           poll();
@@ -411,6 +474,7 @@ feature.statePolling = (function () {
         return function () {
           cancelled = true;
           if (timer !== null) window.clearTimeout(timer);
+          if (refreshRef.current === refresh) refreshRef.current = null;
         };
       },
       [selection.mode, selection.profileId, selection.sessionId]
@@ -423,6 +487,9 @@ feature.statePolling = (function () {
       selectedStateError: view.selectedStateError,
       selectedStateLoading: view.selectedStateLoading,
       hasMatchingResponse: view.hasMatchingResponse,
+      refreshNow: function () {
+        return refreshRef.current ? refreshRef.current() : Promise.resolve();
+      },
     };
   }
 
@@ -501,6 +568,81 @@ feature.sessionCatalog = (function () {
   return { useSessionCatalog: useSessionCatalog };
 })();
 
+feature.tuningController = (function () {
+  function targetFor(selection, response) {
+    if (selection.mode === "exact") {
+      return { profileId: selection.profileId, sessionId: selection.sessionId };
+    }
+    if (response && response.available && response.state) {
+      return {
+        profileId: response.state.profileId,
+        sessionId: response.state.sessionId,
+      };
+    }
+    return null;
+  }
+
+  function errorMessage(error) {
+    return error && error.message ? String(error.message) : "Unable to update session tuning.";
+  }
+
+  function useTuningControls(selection, response, refreshState) {
+    const statusPair = SDK.hooks.useState(null);
+    const status = statusPair[0];
+    const setStatus = statusPair[1];
+    const errorPair = SDK.hooks.useState(null);
+    const error = errorPair[0];
+    const setError = errorPair[1];
+    const target = targetFor(selection, response);
+
+    SDK.hooks.useEffect(
+      function () {
+        setStatus(null);
+        setError(null);
+      },
+      [selection.mode, selection.profileId, selection.sessionId]
+    );
+
+    async function applyExpressionGain(value) {
+      if (!target) return;
+      setStatus("saving");
+      setError(null);
+      try {
+        await feature.infrastructure.setExpressionGain(target, value);
+        setStatus("saved");
+        await refreshState();
+      } catch (requestError) {
+        setStatus("error");
+        setError(errorMessage(requestError));
+      }
+    }
+
+    async function restoreExpressionGain() {
+      if (!target) return;
+      setStatus("saving");
+      setError(null);
+      try {
+        await feature.infrastructure.restoreExpressionGain(target);
+        setStatus("saved");
+        await refreshState();
+      } catch (requestError) {
+        setStatus("error");
+        setError(errorMessage(requestError));
+      }
+    }
+
+    return {
+      target: target,
+      status: status,
+      error: error,
+      applyExpressionGain: applyExpressionGain,
+      restoreExpressionGain: restoreExpressionGain,
+    };
+  }
+
+  return { targetFor: targetFor, useTuningControls: useTuningControls };
+})();
+
 feature.application = (function () {
   function useDashboardState(initialResponse) {
     const selectionPair = SDK.hooks.useState(feature.domain.latestSelection());
@@ -508,6 +650,11 @@ feature.application = (function () {
     const setSelection = selectionPair[1];
     const state = feature.statePolling.useSelectedState(initialResponse, selection);
     const catalog = feature.sessionCatalog.useSessionCatalog();
+    const tuning = feature.tuningController.useTuningControls(
+      selection,
+      state.response,
+      state.refreshNow
+    );
 
     function selectSession(summary) {
       setSelection(feature.domain.exactSelection(summary.profileId, summary.sessionId));
@@ -528,6 +675,13 @@ feature.application = (function () {
       selectedStateLoading: state.selectedStateLoading,
       selectedStateError: state.selectedStateError,
       hasMatchingResponse: state.hasMatchingResponse,
+      tuningConfiguration:
+        state.response && state.response.state ? state.response.state.tuningConfiguration : null,
+      tuningTarget: tuning.target,
+      tuningStatus: tuning.status,
+      tuningError: tuning.error,
+      applyExpressionGain: tuning.applyExpressionGain,
+      restoreExpressionGain: tuning.restoreExpressionGain,
       selectSession: selectSession,
       returnToLatest: returnToLatest,
       refreshSessions: catalog.refreshSessions,
@@ -650,6 +804,203 @@ feature.presentationPrimitives = (function () {
   };
 })();
 
+feature.presentationTuningControls = (function () {
+  const e = SDK.React.createElement;
+  const MINIMUM = 0;
+  const MAXIMUM = 10;
+  const STEP = 0.1;
+
+  function displayValue(value) {
+    return feature.domain.formatNumber(value);
+  }
+
+  function parseDraft(value) {
+    if (value.trim() === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= MINIMUM && number <= MAXIMUM ? number : null;
+  }
+
+  function tuningHeader(configuration) {
+    return e(
+      "div",
+      { className: "ha-tuning-controls__header" },
+      e(
+        "div",
+        null,
+        e("div", { className: "ha-kicker" }, "Session tuning"),
+        e("h2", { id: "ha-tuning-title" }, "Expression gain"),
+        e(
+          "p",
+          { className: "ha-muted" },
+          "Adjust expression strength for this retained session only."
+        )
+      ),
+      configuration.overrideExpressionGain !== null
+        ? e(
+            "span",
+            { className: "ha-tuning-status ha-tuning-status--active" },
+            "Session override active"
+          )
+        : e("span", { className: "ha-tuning-status" }, "Using configured value")
+    );
+  }
+
+  function tuningValues(configuration) {
+    return e(
+      "div",
+      { className: "ha-tuning-values" },
+      e(
+        "span",
+        null,
+        "Configured ",
+        e("strong", null, displayValue(configuration.configuredExpressionGain))
+      ),
+      e(
+        "span",
+        null,
+        "Effective ",
+        e("strong", null, displayValue(configuration.effectiveExpressionGain))
+      )
+    );
+  }
+
+  function tuningInputs(draft, value, effective, saving, setDraft) {
+    return e(
+      "div",
+      { className: "ha-tuning-inputs" },
+      e(
+        "label",
+        { className: "ha-tuning-slider", htmlFor: "ha-expression-gain-range" },
+        e("span", null, "Expression gain"),
+        e("input", {
+          id: "ha-expression-gain-range",
+          type: "range",
+          min: String(MINIMUM),
+          max: String(MAXIMUM),
+          step: String(STEP),
+          value: value === null ? String(effective) : String(value),
+          onChange: function (event) {
+            setDraft(event.target.value);
+          },
+          disabled: saving,
+          "aria-label": "Expression gain from zero to ten",
+        })
+      ),
+      e(
+        "label",
+        { className: "ha-tuning-number", htmlFor: "ha-expression-gain-number" },
+        e("span", null, "Value"),
+        e("input", {
+          id: "ha-expression-gain-number",
+          type: "number",
+          min: String(MINIMUM),
+          max: String(MAXIMUM),
+          step: String(STEP),
+          value: draft,
+          onChange: function (event) {
+            setDraft(event.target.value);
+          },
+          disabled: saving,
+          "aria-label": "Expression gain value",
+        })
+      )
+    );
+  }
+
+  function tuningActions(model, value, changed, saving, overrideActive) {
+    return e(
+      "div",
+      { className: "ha-tuning-actions" },
+      e(
+        "button",
+        {
+          type: "button",
+          className: "ha-control-button",
+          onClick: function () {
+            model.applyExpressionGain(value);
+          },
+          disabled: saving || value === null || !changed,
+        },
+        saving ? "Saving…" : "Apply"
+      ),
+      e(
+        "button",
+        {
+          type: "button",
+          className: "ha-link-button",
+          onClick: model.restoreExpressionGain,
+          disabled: saving || !overrideActive,
+        },
+        "Restore configured value"
+      )
+    );
+  }
+
+  function tuningFeedback(model) {
+    return [
+      model.tuningStatus === "saved"
+        ? e(
+            "p",
+            { className: "ha-tuning-feedback", role: "status", key: "saved" },
+            "Saved for this session."
+          )
+        : null,
+      model.tuningError
+        ? e(
+            "p",
+            {
+              className: "ha-tuning-feedback ha-tuning-feedback--error",
+              role: "alert",
+              key: "error",
+            },
+            model.tuningError
+          )
+        : null,
+    ];
+  }
+
+  function TuningControls(props) {
+    const model = props.model;
+    const state = props.state;
+    const configuration = state.tuningConfiguration;
+    const initialValue = configuration ? configuration.effectiveExpressionGain : null;
+    const draftPair = SDK.hooks.useState(
+      initialValue === null || initialValue === undefined ? "" : String(initialValue)
+    );
+    const draft = draftPair[0];
+    const setDraft = draftPair[1];
+
+    SDK.hooks.useEffect(
+      function () {
+        setDraft(initialValue === null || initialValue === undefined ? "" : String(initialValue));
+      },
+      [
+        state.profileId,
+        state.sessionId,
+        configuration ? configuration.effectiveExpressionGain : null,
+      ]
+    );
+
+    if (!configuration || !configuration.available || !model.tuningTarget) return null;
+
+    const value = parseDraft(draft);
+    const saving = model.tuningStatus === "saving";
+    const overrideActive = configuration.overrideExpressionGain !== null;
+    const changed = value !== null && value !== configuration.effectiveExpressionGain;
+    return e(
+      "section",
+      { className: "ha-tuning-controls", "aria-labelledby": "ha-tuning-title" },
+      tuningHeader(configuration),
+      tuningValues(configuration),
+      tuningInputs(draft, value, configuration.effectiveExpressionGain, saving, setDraft),
+      tuningActions(model, value, changed, saving, overrideActive),
+      tuningFeedback(model)
+    );
+  }
+
+  return { TuningControls: TuningControls };
+})();
+
 feature.presentationStateView = (function () {
   const e = SDK.React.createElement;
   const primitives = feature.presentationPrimitives;
@@ -707,7 +1058,7 @@ feature.presentationStateView = (function () {
     );
   }
 
-  function renderState(state, hasError) {
+  function renderState(state, hasError, tuningControls) {
     const updated = primitives.updatedLabel(state.updatedAt);
     const expression =
       state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive);
@@ -722,6 +1073,7 @@ feature.presentationStateView = (function () {
             "Live refresh is temporarily unavailable. Showing the last valid snapshot."
           )
         : null,
+      tuningControls,
       e(
         "header",
         { className: "ha-hero" },
@@ -1099,6 +1451,7 @@ feature.presentation = (function () {
   const primitives = feature.presentationPrimitives;
   const stateView = feature.presentationStateView;
   const navigator = feature.presentationSessionNavigator;
+  const tuning = feature.presentationTuningControls;
 
   function selectionPanel(model) {
     if (model.selectedStateLoading) {
@@ -1134,7 +1487,11 @@ feature.presentation = (function () {
       const model = feature.application.useDashboardState(initialResponse);
       const stateContent =
         model.hasMatchingResponse && model.response.state
-          ? stateView.renderState(model.response.state, model.hasError)
+          ? stateView.renderState(
+              model.response.state,
+              model.hasError,
+              e(tuning.TuningControls, { model: model, state: model.response.state })
+            )
           : selectionPanel(model);
       return e(
         "div",

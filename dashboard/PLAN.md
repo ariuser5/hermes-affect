@@ -17,8 +17,8 @@ Checkpoint date: 2026-09-21.
 - [x] Implement the shared safe-state projection.
 - [x] Implement the default-off endpoint, conditional tab, visual page, and
       deterministic asset build.
-- [x] Pass 137 repository unit tests, 14 dashboard tests, the frontend domain
-      test, generated-asset check, and JavaScript syntax check.
+- [x] Pass the repository and dashboard unit tests, frontend domain/controller
+      tests, generated-asset check, and JavaScript syntax check.
 - [x] Run Ruff.
 - [ ] Smoke-test the packaged extension in the pinned Hermes image.
 - [ ] Propose or apply the separate Docker configuration change only with
@@ -50,7 +50,8 @@ checked-in extension remains inaccessible unless it is installed in Hermes and
 2. Do not start a plugin-owned web server and do not publish a new Docker port.
 3. Require both Hermes' dashboard and `HERMES_AFFECT_DASHBOARD=1`. The affect
    flag defaults to disabled.
-4. Keep the API read-only in the first release.
+4. Keep dashboard writes narrow: only the selected session's supported
+   `expression_gain` override may be applied or restored.
 5. Reuse one shared safe-state projection for `/affect state` and the HTTP API.
 6. Show the latest state available in the current container first. Do not
    weaken separate-container state isolation to build an all-bot view.
@@ -92,6 +93,7 @@ dashboard/
 │   │   ├── application/                  # focused polling/catalog orchestration
 │   │   │   ├── state_polling.js
 │   │   │   ├── session_catalog.js
+│   │   │   ├── tuning_controller.js
 │   │   │   └── state_controller.js
 │   │   ├── domain/                       # scales, labels, state validation
 │   │   ├── infrastructure/               # authenticated API client
@@ -99,6 +101,7 @@ dashboard/
 │   │   │   ├── primitives.js
 │   │   │   ├── state_view.js
 │   │   │   ├── session_navigator.js
+│   │   │   ├── tuning_controls.js
 │   │   │   └── page.js
 │   │   └── index.js                      # registration boundary
 │   └── README.md
@@ -135,7 +138,8 @@ Acceptance criteria:
 - [x] Add a thin `dashboard/plugin_api.py` exporting a FastAPI `router`.
 - [x] Add `GET /state` for the latest current-container snapshot.
 - [x] Return `404` while the feature flag is disabled so no state is disclosed.
-- [x] Add no POST, PUT, PATCH, or DELETE routes.
+- [x] Add only the authenticated POST/DELETE routes needed for session-scoped
+      `expression_gain` apply/restore; keep all broader mutation out of scope.
 - [x] Reuse `HERMES_AFFECT_STATE_DIR` for the state root.
 - [x] Verify behavior when the directory is missing, empty, malformed, or
       concurrently updated.
@@ -216,7 +220,10 @@ Acceptance criteria:
 - Cross-container aggregation for several bot instances.
 - Historical charts and long-term affect trends.
 - WebSocket or server-sent-event updates.
-- Mutating controls such as calm, heat, tune, or reset.
+- Mutating controls such as calm, heat, reset, raw affect values, traits,
+  relationships, sensitivities, or conflicts.
+- Dashboard tuning controls for fields other than the supported v2
+  `expression_gain` override.
 - Public or unauthenticated temperament summaries.
 
 Each item requires its own privacy, authorization, and deployment review.

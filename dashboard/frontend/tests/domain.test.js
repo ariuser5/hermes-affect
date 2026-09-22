@@ -15,6 +15,12 @@ const normalized = feature.domain.normalizeResponse({
     profile_id: "bot:one",
     session_id: "session:one",
     revision: 4,
+    tuning_configuration: {
+      available: true,
+      configured: { expression_gain: 1 },
+      effective: { expression_gain: 2.5 },
+      overrides: { expression_gain: 2.5 },
+    },
     affect: { valence: 4, arousal: -2, frustration: 0.5, offended: "bad" },
     relationships: { "user:one": { trust: 2, irritation: 0.4 } },
     open_conflicts: { "user:one": { heat: 0.7, status: "open" } },
@@ -26,6 +32,10 @@ assert.equal(normalized.state.affect.valence, 1);
 assert.equal(normalized.state.affect.arousal, 0);
 assert.equal(normalized.state.affect.frustration, 0.5);
 assert.equal(normalized.state.affect.offended, 0);
+assert.equal(normalized.state.tuningConfiguration.available, true);
+assert.equal(normalized.state.tuningConfiguration.configuredExpressionGain, 1);
+assert.equal(normalized.state.tuningConfiguration.effectiveExpressionGain, 2.5);
+assert.equal(normalized.state.tuningConfiguration.overrideExpressionGain, 2.5);
 assert.equal(normalized.state.relationships[0].trust, 1);
 assert.equal(feature.domain.percent(0, -1, 1), 50);
 assert.equal(feature.domain.label("counter_attack"), "Counter Attack");

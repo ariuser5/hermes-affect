@@ -3,6 +3,7 @@ feature.presentation = (function () {
   const primitives = feature.presentationPrimitives;
   const stateView = feature.presentationStateView;
   const navigator = feature.presentationSessionNavigator;
+  const tuning = feature.presentationTuningControls;
 
   function selectionPanel(model) {
     if (model.selectedStateLoading) {
@@ -38,7 +39,11 @@ feature.presentation = (function () {
       const model = feature.application.useDashboardState(initialResponse);
       const stateContent =
         model.hasMatchingResponse && model.response.state
-          ? stateView.renderState(model.response.state, model.hasError)
+          ? stateView.renderState(
+              model.response.state,
+              model.hasError,
+              e(tuning.TuningControls, { model: model, state: model.response.state })
+            )
           : selectionPanel(model);
       return e(
         "div",

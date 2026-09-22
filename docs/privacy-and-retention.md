@@ -83,7 +83,9 @@ untrusted users.
 `HERMES_AFFECT_DASHBOARD` is a separate default-off disclosure boundary. When
 enabled, the native Hermes dashboard extension serves the same bounded
 current-state projection behind Hermes' existing dashboard authentication. It
-adds no public listener and no mutation route. The projection includes profile
+adds no public listener. Its only mutation is an exact-session
+`expression_gain` apply/restore operation; it does not modify SOUL configuration
+or other sessions. The projection includes profile
 and session identifiers, numerical affect, relationships, sensitivities,
 conflicts, and tuning, so dashboard credentials must be treated as access to
 private interpersonal state.

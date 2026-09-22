@@ -34,6 +34,8 @@ designed for `/affect state`:
 - derived expression drive;
 - current relationship dimensions;
 - active sensitivities, open conflicts, and tuning overrides.
+- configured and effective `expression_gain` values needed by the session
+  tuning control.
 
 The retained-session catalog exposes only bounded profile/session IDs, update
 time, revision, mood, posture, and model version. Exact state selection requires
@@ -60,8 +62,12 @@ The endpoint must never return:
 
 ## API constraints
 
-- Initial routes are `GET` only.
-- No calm, heat, tune, reset, migration, or deletion controls.
+- State and catalog routes are `GET`; the only mutation routes are authenticated
+  exact-session apply/restore operations for `expression_gain`.
+- No calm, heat, reset, migration, raw affect, trait, relationship, sensitivity,
+  or conflict controls.
+- Tuning values are bounded to `0.0` through `10.0`, and the shared service
+  prevents unsupported fields from being changed.
 - Errors are bounded and omit state-file contents and paths.
 - Catalog pages are bounded and exact selection verifies parsed identifiers
   after sanitized path resolution.

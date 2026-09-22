@@ -16,11 +16,13 @@ a Hermes registration adapter, examples, and unit tests. Semantic
 classification is disabled by default and uses the active Hermes provider only
 when explicitly enabled.
 
-An optional read-only affect dashboard is also implemented under
-[`dashboard/`](dashboard/README.md). It uses Hermes' authenticated dashboard
-extension surface, shares the existing dashboard port, and remains disabled
-unless `HERMES_AFFECT_DASHBOARD=1` is explicitly supplied to the dashboard
-process.
+An optional authenticated affect dashboard is also implemented under
+[`dashboard/`](dashboard/README.md). It uses Hermes' dashboard extension
+surface, shares the existing dashboard port, and remains disabled unless
+`HERMES_AFFECT_DASHBOARD=1` is explicitly supplied to the dashboard process.
+Its only write control is a session-scoped `expression_gain` override with an
+explicit restore action; it does not modify SOUL configuration or other
+sessions.
 
 The plugin is intentionally developed against Hermes' documented public
 general-plugin API rather than a single pinned runtime image. Newest Hermes

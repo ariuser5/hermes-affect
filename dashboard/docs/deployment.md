@@ -19,8 +19,9 @@ The complete enablement conditions are:
 3. `HERMES_AFFECT_DASHBOARD=1` is set explicitly.
 4. The existing dashboard authentication provider is configured successfully.
 
-The feature reads the same `HERMES_AFFECT_STATE_DIR` as the main plugin. It
-must never write state through the dashboard path.
+The feature reads and, for the narrow authenticated tuning controls, writes
+the same `HERMES_AFFECT_STATE_DIR` as the main plugin. It must not modify SOUL
+configuration or any session other than the selected exact session.
 
 ## Source and artifact installation
 
@@ -54,7 +55,8 @@ unchanged.
 4. Smoke-test it enabled on loopback or an isolated test instance.
 5. Confirm unauthenticated requests are rejected by Hermes.
 6. Confirm the existing dashboard port is the only published web port.
-7. Confirm the endpoint cannot mutate state and exposes no excluded fields.
+7. Confirm only the exact-session `expression_gain` apply/restore routes can
+   mutate state and that no excluded fields are exposed.
 8. Confirm the retained-session catalog is bounded and exact selection cannot
    cross a sanitized profile/session path collision.
 9. Only after explicit authorization, propose and validate the infrastructure

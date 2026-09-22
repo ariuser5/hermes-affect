@@ -65,7 +65,8 @@
 }
 
 .ha-control-button:disabled,
-.ha-load-more:disabled {
+.ha-load-more:disabled,
+.ha-link-button:disabled {
   cursor: wait;
   opacity: 0.6;
 }
@@ -178,6 +179,96 @@
 .ha-session-navigator__empty {
   padding: 0.1rem 0;
   font-size: 0.78rem;
+}
+
+.ha-tuning-controls {
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--ha-accent) 28%, var(--color-border));
+  border-radius: calc(var(--radius, 0.5rem) * 1.25);
+  background: color-mix(in srgb, var(--color-card) 97%, var(--ha-accent) 3%);
+}
+
+.ha-tuning-controls__header,
+.ha-tuning-values,
+.ha-tuning-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+}
+
+.ha-tuning-controls h2 {
+  margin: 0.25rem 0;
+  font-size: 1rem;
+}
+
+.ha-tuning-controls p {
+  margin: 0;
+  font-size: 0.75rem;
+}
+
+.ha-tuning-status,
+.ha-tuning-values {
+  color: var(--color-muted-foreground);
+  font-size: 0.76rem;
+}
+
+.ha-tuning-status--active {
+  color: var(--ha-accent);
+}
+
+.ha-tuning-values strong {
+  color: var(--color-foreground);
+  font-family: var(--theme-font-mono, ui-monospace, monospace);
+}
+
+.ha-tuning-inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(7rem, 9rem);
+  align-items: end;
+  gap: 1rem;
+}
+
+.ha-tuning-slider,
+.ha-tuning-number {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.72rem;
+}
+
+.ha-tuning-slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--ha-accent);
+}
+
+.ha-tuning-number input {
+  width: 100%;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 0.5rem);
+  color: var(--color-foreground);
+  background: var(--color-background);
+  font: inherit;
+  color-scheme: dark;
+}
+
+.ha-tuning-feedback {
+  color: var(--ha-accent);
+}
+
+.ha-tuning-feedback--error {
+  color: var(--ha-warning);
+}
+
+.ha-tuning-controls input:focus-visible,
+.ha-tuning-controls button:focus-visible {
+  outline: 2px solid var(--ha-accent);
+  outline-offset: 2px;
 }
 
 .ha-selection-panel {
@@ -565,4 +656,5 @@
   .ha-stat-grid,
   .ha-mini-grid { grid-template-columns: 1fr; }
   .ha-mini-grid .ha-metric:last-child { grid-column: auto; }
+  .ha-tuning-inputs { grid-template-columns: 1fr; }
 }

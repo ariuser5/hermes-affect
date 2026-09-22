@@ -15,7 +15,9 @@ compact session selector so an authenticated dashboard user can select a
 retained session and inspect that session's persisted affect snapshot.
 
 The selected session is a snapshot selector, not a timeline. Historical charts,
-cross-container aggregation, and state mutation remain out of scope.
+cross-container aggregation, and broad state mutation remain out of scope.
+The separate session-scoped `expression_gain` tuning control is documented in
+the dashboard implementation plan.
 
 ## Required behavior
 
@@ -246,7 +248,8 @@ task.
 
 - Both new read forms stay behind Hermes dashboard authentication and the
   existing `HERMES_AFFECT_DASHBOARD` gate.
-- Keep all routes `GET`-only and read-only.
+- Keep state and catalog routes read-only; any mutation must remain limited to
+  the separately reviewed exact-session tuning control.
 - Never accept a filesystem path from the browser.
 - Verify exact parsed profile/session identity after resolving the sanitized
   storage path.
@@ -344,7 +347,8 @@ never loses the chosen identity during polling.
 - Cross-container/all-bot aggregation.
 - Conversation titles or transcript lookup through private Hermes APIs.
 - URL deep links and browser-persisted selection.
-- Dashboard mutations such as calm, heat, tune, reset, migrate, or delete.
+- Dashboard mutations such as calm, heat, reset, migrate, delete, or tuning
+  fields beyond the supported `expression_gain` override.
 - Automatic caching/index files before catalog performance is measured.
 
 ## Luna handoff order

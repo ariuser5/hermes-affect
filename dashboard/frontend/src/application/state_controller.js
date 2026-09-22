@@ -5,6 +5,11 @@ feature.application = (function () {
     const setSelection = selectionPair[1];
     const state = feature.statePolling.useSelectedState(initialResponse, selection);
     const catalog = feature.sessionCatalog.useSessionCatalog();
+    const tuning = feature.tuningController.useTuningControls(
+      selection,
+      state.response,
+      state.refreshNow
+    );
 
     function selectSession(summary) {
       setSelection(feature.domain.exactSelection(summary.profileId, summary.sessionId));
@@ -25,6 +30,13 @@ feature.application = (function () {
       selectedStateLoading: state.selectedStateLoading,
       selectedStateError: state.selectedStateError,
       hasMatchingResponse: state.hasMatchingResponse,
+      tuningConfiguration:
+        state.response && state.response.state ? state.response.state.tuningConfiguration : null,
+      tuningTarget: tuning.target,
+      tuningStatus: tuning.status,
+      tuningError: tuning.error,
+      applyExpressionGain: tuning.applyExpressionGain,
+      restoreExpressionGain: tuning.restoreExpressionGain,
       selectSession: selectSession,
       returnToLatest: returnToLatest,
       refreshSessions: catalog.refreshSessions,

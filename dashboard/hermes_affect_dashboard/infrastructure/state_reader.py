@@ -1,4 +1,4 @@
-"""Read-only adapter for the existing affect JSON store."""
+"""Adapter for the existing affect JSON store."""
 
 from __future__ import annotations
 
@@ -24,7 +24,7 @@ def resolve_state_root(
 
 
 class FileStateReader:
-    """Find the newest valid state in this container without writing it."""
+    """Find and persist valid state in this container."""
 
     def __init__(self, root: str | Path) -> None:
         self.store = StateStore(root)
@@ -41,3 +41,6 @@ class FileStateReader:
 
     def recent_states(self, limit: int, offset: int = 0) -> list[AffectState]:
         return self.store.recent(limit, offset)
+
+    def save_state(self, state: AffectState) -> None:
+        self.store.save(state)

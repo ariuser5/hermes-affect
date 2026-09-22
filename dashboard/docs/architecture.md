@@ -2,15 +2,16 @@
 
 ## Objective
 
-Provide a clear, read-only view of the latest affect state without creating a
-second state model, web server, authentication system, or Docker exposure.
+Provide a clear view of the latest affect state, with one narrow
+session-scoped tuning control, without creating a second state model, web
+server, authentication system, or Docker exposure.
 
 ## Runtime flow
 
 ```text
 Hermes dashboard browser tab
         |
-        | authenticated GET /api/plugins/hermes-affect/state
+        | authenticated state reads and session tuning writes
         v
 dashboard/plugin_api.py
         |
@@ -25,7 +26,8 @@ HERMES_AFFECT_STATE_DIR/<profile>/sessions/<session>.json
 ```
 
 Hermes owns HTTP serving, authentication, route mounting, and static-asset
-loading. The feature owns only the affect-specific read adapter and page.
+loading. The feature owns only the affect-specific state adapter, narrow tuning
+use case, and page.
 
 ## Layering
 
@@ -34,7 +36,8 @@ The backend mirrors the main plugin:
 - `domain/` defines bounded view models and validation without Hermes or
   FastAPI imports.
 - `application/` chooses the latest or exact state, assembles the response
-  using the shared safe projection, and produces bounded session catalog pages.
+  using the shared safe projection, produces bounded session catalog pages, and
+  delegates tuning validation/mutation to the shared plugin service.
 - `infrastructure/` reads the file-backed state store and translates storage
   failures at the boundary.
 - `plugin_api.py` is the thin Hermes/FastAPI adapter.
@@ -61,13 +64,23 @@ existing isolation model.
 
 ## API shape
 
-The read-only endpoints are:
+The state and catalog endpoints are:
 
 ```text
 GET /api/plugins/hermes-affect/state
 GET /api/plugins/hermes-affect/state?profile_id=<id>&session_id=<id>
 GET /api/plugins/hermes-affect/sessions?limit=50&offset=0
 ```
+
+The only mutation endpoints are the authenticated, exact-session controls:
+
+```text
+POST /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>&expression_gain=<0..10>
+DELETE /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>
+```
+
+They apply or remove only the v2 `expression_gain` override in that session.
+The command and dashboard use the same validation and mutation service.
 
 The response wraps the same projection as `/affect state`:
 

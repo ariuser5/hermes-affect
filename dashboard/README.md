@@ -1,6 +1,6 @@
 # Hermes Affect dashboard
 
-This directory contains the optional, read-only Hermes Affect web dashboard.
+This directory contains the optional, authenticated Hermes Affect web dashboard.
 It follows the same application/domain/infrastructure layering as the main
 plugin and uses Hermes' native dashboard-extension surface rather than running
 another web server.
@@ -23,8 +23,9 @@ emit an administrative warning. While disabled, `GET /state` returns `404` and
 the browser does not add an Affect tab.
 
 The endpoint uses the existing Hermes dashboard authentication and port. It
-does not open another listener, publish another Docker port, or write affect
-state.
+does not open another listener or publish another Docker port. The dashboard
+can write only the selected session's supported `expression_gain` override;
+it never changes SOUL configuration or another session.
 
 ## What the page shows
 
@@ -41,12 +42,14 @@ The state view shows mood, posture, freshness, expression drive, perceived
 atmosphere, affect values, relationships, active sensitivities, open conflicts,
 and temporary tuning overrides.
 
-The read-only API exposes the existing latest-state route plus these selection
-forms:
+The API exposes the existing latest-state route plus these selection forms and
+one narrow session-scoped tuning control:
 
 ```text
 GET /api/plugins/hermes-affect/state?profile_id=<id>&session_id=<id>
 GET /api/plugins/hermes-affect/sessions?limit=50&offset=0
+POST /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>&expression_gain=<0..10>
+DELETE /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>
 ```
 
 The catalog is capped at 100 entries per page and returns summaries only.
@@ -101,7 +104,8 @@ come from Hermes' dashboard SDK at runtime.
 The first release deliberately selects the latest state inside one Hermes
 container. Deployments that isolate each bot in its own container therefore
 get one bot per dashboard. Cross-container aggregation, history charts,
-WebSockets, and mutation controls remain deferred.
+WebSockets, and broader mutation controls remain deferred. The dashboard's
+expression-gain control is intentionally limited to the selected session.
 
 No deployment repository, running Hermes configuration, or Raspberry Pi state
 is changed by this feature directory. See [`docs/deployment.md`](docs/deployment.md)

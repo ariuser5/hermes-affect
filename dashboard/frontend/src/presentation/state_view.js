@@ -55,7 +55,7 @@ feature.presentationStateView = (function () {
     );
   }
 
-  function renderState(state, hasError) {
+  function renderState(state, hasError, tuningControls) {
     const updated = primitives.updatedLabel(state.updatedAt);
     const expression =
       state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive);
@@ -70,6 +70,7 @@ feature.presentationStateView = (function () {
             "Live refresh is temporarily unavailable. Showing the last valid snapshot."
           )
         : null,
+      tuningControls,
       e(
         "header",
         { className: "ha-hero" },

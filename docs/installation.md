@@ -131,7 +131,9 @@ HERMES_AFFECT_DASHBOARD: "1"
 The extension uses the existing authenticated dashboard listener and port. Do
 not add a sidecar, new host port, or broader state mount. It reads the same
 `HERMES_AFFECT_STATE_DIR` as the plugin, falling back to
-`<HERMES_HOME>/affect-state`, and never writes state.
+`<HERMES_HOME>/affect-state`. Its authenticated dashboard controls write only
+the selected session's supported `expression_gain` override or restore it;
+they do not change SOUL configuration or other sessions.
 
 Rebuild and check committed browser assets before installing a source change:
 

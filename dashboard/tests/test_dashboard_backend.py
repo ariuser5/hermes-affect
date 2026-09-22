@@ -22,6 +22,7 @@ from dashboard.hermes_affect_dashboard.application.session_catalog import (
     DashboardSessionCatalogService,
     session_summary,
 )
+from dashboard.hermes_affect_dashboard.application.tuning import DashboardTuningService
 from dashboard.hermes_affect_dashboard.domain.session_models import SessionCatalogResponse
 from dashboard.hermes_affect_dashboard.infrastructure.state_reader import (
     FileStateReader,
@@ -83,6 +84,15 @@ class InspectionTests(unittest.TestCase):
         self.assertEqual(payload["open_conflicts"]["user:one"], {"heat": 1.0, "status": "open"})
         self.assertNotIn("malformed", payload["open_conflicts"])
         self.assertEqual(payload["tuning_overrides"], {"expression_gain": 2.0})
+        self.assertEqual(
+            payload["tuning_configuration"],
+            {
+                "available": True,
+                "configured": {"expression_gain": 1.0},
+                "effective": {"expression_gain": 2.0},
+                "overrides": {"expression_gain": 2.0},
+            },
+        )
         for private_value in (
             "do not expose",
             "audit secret",
@@ -105,6 +115,7 @@ class InspectionTests(unittest.TestCase):
         self.assertTrue(any("Legacy affect session" in warning for warning in warnings))
         self.assertTrue(payload["migration_required"])
         self.assertIsNone(payload["expression_drive"])
+        self.assertFalse(payload["tuning_configuration"]["available"])
 
 
 class StateReaderTests(unittest.TestCase):
@@ -314,18 +325,58 @@ class SessionSummaryTests(unittest.TestCase):
         self.assertEqual(response["state"]["profile_id"], "bot:one")
 
 
+class DashboardTuningServiceTests(unittest.TestCase):
+    def test_mutation_is_saved_only_to_the_selected_exact_session(self) -> None:
+        selected = AffectState.initial("bot:one", "session:one")
+        other = AffectState.initial("bot:one", "session:two")
+
+        class Reader:
+            def __init__(self) -> None:
+                self.saved: list[AffectState] = []
+
+            def exact_state(self, profile_id: str, session_id: str) -> AffectState | None:
+                return {
+                    (selected.profile_id, selected.session_id): selected,
+                    (other.profile_id, other.session_id): other,
+                }.get((profile_id, session_id))
+
+            def save_state(self, state: AffectState) -> None:
+                self.saved.append(state)
+
+        reader = Reader()
+        service = DashboardTuningService(reader)
+
+        service.set_expression_gain("bot:one", "session:one", 3.5)
+        self.assertEqual(selected.tuning_overrides, {"expression_gain": 3.5})
+        self.assertEqual(other.tuning_overrides, {})
+        self.assertEqual(reader.saved, [selected])
+
+        service.restore_expression_gain("bot:one", "session:one")
+        self.assertEqual(selected.tuning_overrides, {})
+        self.assertEqual(reader.saved, [selected, selected])
+
+
 class PluginApiAdapterTests(unittest.TestCase):
     def _load_adapter(self, *, enabled: str) -> types.ModuleType:
         class FakeRouter:
             def __init__(self) -> None:
-                self.routes: list[tuple[str, object]] = []
+                self.routes: list[tuple[str, str, object]] = []
 
-            def get(self, path: str):
+            def _register(self, method: str, path: str):
                 def decorator(callback):
-                    self.routes.append((path, callback))
+                    self.routes.append((method, path, callback))
                     return callback
 
                 return decorator
+
+            def get(self, path: str):
+                return self._register("GET", path)
+
+            def post(self, path: str):
+                return self._register("POST", path)
+
+            def delete(self, path: str):
+                return self._register("DELETE", path)
 
         class FakeHttpException(Exception):
             def __init__(self, *, status_code: int, detail: str) -> None:
@@ -350,10 +401,10 @@ class PluginApiAdapterTests(unittest.TestCase):
             spec.loader.exec_module(module)
         return module
 
-    def test_adapter_exports_only_read_only_state_route(self) -> None:
+    def test_disabled_adapter_registers_no_routes(self) -> None:
         module = self._load_adapter(enabled="0")
 
-        self.assertEqual([path for path, _ in module.router.routes], [])
+        self.assertEqual(module.router.routes, [])
         with self.assertRaises(module.HTTPException) as raised:
             asyncio.run(module.get_current_state())
         self.assertEqual(raised.exception.status_code, 404)
@@ -363,12 +414,25 @@ class PluginApiAdapterTests(unittest.TestCase):
         with self.assertRaises(module.HTTPException) as raised:
             asyncio.run(module.get_sessions(limit=0))
         self.assertEqual(raised.exception.status_code, 404)
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(
+                module.set_expression_gain(
+                    profile_id="bot:one", session_id="session:one", expression_gain=2.0
+                )
+            )
+        self.assertEqual(raised.exception.status_code, 404)
 
-    def test_enabled_adapter_registers_both_read_only_routes(self) -> None:
+    def test_enabled_adapter_registers_state_catalog_and_tuning_routes(self) -> None:
         module = self._load_adapter(enabled="1")
 
         self.assertEqual(
-            [path for path, _ in module.router.routes], ["/state", "/sessions"]
+            [(method, path) for method, path, _callback in module.router.routes],
+            [
+                ("GET", "/state"),
+                ("GET", "/sessions"),
+                ("POST", "/tuning"),
+                ("DELETE", "/tuning"),
+            ],
         )
 
     def test_enabled_adapter_returns_service_response(self) -> None:
@@ -442,6 +506,42 @@ class PluginApiAdapterTests(unittest.TestCase):
                 module.get_current_state(profile_id="bot:gone", session_id="session:gone")
             )
         self.assertEqual(raised.exception.status_code, 404)
+
+    def test_tuning_routes_use_dashboard_service_and_return_exact_snapshot(self) -> None:
+        module = self._load_adapter(enabled="1")
+        calls: list[tuple[str, str, object]] = []
+
+        class Tuning:
+            def set_expression_gain(self, profile_id, session_id, value):
+                calls.append(("set", profile_id, value))
+
+            def restore_expression_gain(self, profile_id, session_id):
+                calls.append(("restore", profile_id, session_id))
+
+        class Inspection:
+            def current_state(self, profile_id=None, session_id=None):
+                return {
+                    "available": True,
+                    "state": {"profile_id": profile_id, "session_id": session_id},
+                }
+
+        module._TUNING = Tuning()
+        module._INSPECTION = Inspection()
+        selected = asyncio.run(
+            module.set_expression_gain(
+                profile_id="bot:one", session_id="session:one", expression_gain=2.5
+            )
+        )
+        restored = asyncio.run(
+            module.restore_expression_gain(profile_id="bot:one", session_id="session:one")
+        )
+
+        self.assertEqual(
+            calls,
+            [("set", "bot:one", 2.5), ("restore", "bot:one", "session:one")],
+        )
+        self.assertEqual(selected["state"]["session_id"], "session:one")
+        self.assertEqual(restored["state"]["profile_id"], "bot:one")
 
 
 if __name__ == "__main__":

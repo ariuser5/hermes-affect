@@ -29,6 +29,27 @@ feature.domain = (function () {
     return Object.entries(objectOrEmpty(value)).slice(-COLLECTION_LIMIT);
   }
 
+  function normalizeTuningConfiguration(raw) {
+    const configuration = objectOrEmpty(raw);
+    const configured = objectOrEmpty(configuration.configured);
+    const effective = objectOrEmpty(configuration.effective);
+    const overrides = objectOrEmpty(configuration.overrides);
+    const available = configuration.available === true;
+    return {
+      available: available,
+      configuredExpressionGain: available
+        ? finite(configured.expression_gain, 0, 10, 1)
+        : null,
+      effectiveExpressionGain: available
+        ? finite(effective.expression_gain, 0, 10, 1)
+        : null,
+      overrideExpressionGain:
+        available && Object.prototype.hasOwnProperty.call(overrides, "expression_gain")
+          ? finite(overrides.expression_gain, 0, 10, 1)
+          : null,
+    };
+  }
+
   function normalizeRelationship(participantId, raw) {
     const relation = objectOrEmpty(raw);
     return {
@@ -99,6 +120,7 @@ feature.domain = (function () {
         tuning: entries(state.tuning_overrides).map(function (entry) {
           return [text(entry[0], "unknown"), finite(entry[1], 0, 10, 0)];
         }),
+        tuningConfiguration: normalizeTuningConfiguration(state.tuning_configuration),
       },
     };
   }
@@ -220,6 +242,7 @@ feature.domain = (function () {
 
   return {
     normalizeResponse: normalizeResponse,
+    normalizeTuningConfiguration: normalizeTuningConfiguration,
     latestSelection: latestSelection,
     exactSelection: exactSelection,
     sameSelection: sameSelection,

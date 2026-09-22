@@ -1,6 +1,7 @@
 feature.infrastructure = (function () {
   const ENDPOINT = "/api/plugins/hermes-affect/state";
   const SESSIONS_ENDPOINT = "/api/plugins/hermes-affect/sessions";
+  const TUNING_ENDPOINT = "/api/plugins/hermes-affect/tuning";
 
   function loadState(selection) {
     const params = new URLSearchParams();
@@ -19,5 +20,28 @@ feature.infrastructure = (function () {
     return SDK.fetchJSON(SESSIONS_ENDPOINT + "?" + params.toString());
   }
 
-  return { loadState: loadState, loadSessions: loadSessions };
+  function tuningQuery(target) {
+    const params = new URLSearchParams();
+    params.set("profile_id", target.profileId);
+    params.set("session_id", target.sessionId);
+    return params;
+  }
+
+  function setExpressionGain(target, value) {
+    const params = tuningQuery(target);
+    params.set("expression_gain", String(value));
+    return SDK.fetchJSON(TUNING_ENDPOINT + "?" + params.toString(), { method: "POST" });
+  }
+
+  function restoreExpressionGain(target) {
+    const params = tuningQuery(target);
+    return SDK.fetchJSON(TUNING_ENDPOINT + "?" + params.toString(), { method: "DELETE" });
+  }
+
+  return {
+    loadState: loadState,
+    loadSessions: loadSessions,
+    setExpressionGain: setExpressionGain,
+    restoreExpressionGain: restoreExpressionGain,
+  };
 })();

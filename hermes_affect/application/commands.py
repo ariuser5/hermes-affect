@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import math
 from typing import Any
 
 from ..domain.calculations import (
@@ -12,9 +11,9 @@ from ..domain.calculations import (
     social_receptivity,
     temperament_drives,
 )
-from ..domain.configuration import TUNING_FIELDS
-from ..domain.state import AffectState, utc_now
+from ..domain.state import AffectState
 from .inspection import state_snapshot
+from .tuning import SessionTuningService
 
 
 class AffectCommandHandler:
@@ -22,6 +21,7 @@ class AffectCommandHandler:
 
     def __init__(self, runtime: Any) -> None:
         self.runtime = runtime
+        self.tuning = SessionTuningService()
 
     def handle(self, *args: Any, **kwargs: Any) -> str:
         raw_args = kwargs.get("args_raw") or kwargs.get("args") or (args[0] if args else "status")
@@ -97,17 +97,10 @@ class AffectCommandHandler:
             if len(parts) != 3:
                 return "Usage: /affect tune expression_gain <0..10>"
             name = parts[1]
-            if name not in TUNING_FIELDS:
-                return "Only expression_gain may be tuned in model v2."
             try:
-                value = float(parts[2])
-            except (TypeError, ValueError):
-                return "Tune value must be a finite number between 0 and 10."
-            if not math.isfinite(value) or not 0.0 <= value <= 10.0:
-                return "Tune value must be a finite number between 0 and 10."
-            state.tuning_overrides[name] = value
-            state.updated_at = utc_now()
-            state.revision += 1
+                value = self.tuning.set_override(state, name, parts[2])
+            except ValueError as error:
+                return str(error)
             self.runtime.store.save(state)
             return f"Session tuning override set: {name}={value:g}."
         return "Usage: /affect state [profile] | status|explain|reset|calm|heat|tune"
