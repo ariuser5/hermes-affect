@@ -2,46 +2,46 @@
 
 from __future__ import annotations
 
-from typing import Protocol
-
 from hermes_affect.application.inspection import resolve_state_config
 from hermes_affect.application.tuning import SessionTuningService
 from hermes_affect.domain.state import AffectState
-
-
-class DashboardTuningReader(Protocol):
-    def exact_state(self, profile_id: str, session_id: str) -> AffectState | None: ...
-
-    def save_state(self, state: AffectState) -> None: ...
+from hermes_affect.infrastructure.persistence.json_store import StateStore
 
 
 class DashboardTuningService:
     """Apply supported dashboard controls to one retained exact session."""
 
-    def __init__(self, reader: DashboardTuningReader) -> None:
-        self.reader = reader
+    def __init__(self, store: StateStore) -> None:
+        self.store = store
         self.tuning = SessionTuningService()
 
     def set_expression_gain(
-        self, profile_id: str, session_id: str, value: object
+        self,
+        profile_id: str,
+        session_id: str,
+        value: object,
+        expected_revision: int,
     ) -> AffectState:
-        state = self._load_state(profile_id, session_id)
-        self._require_current_model(state)
-        self.tuning.set_override(state, "expression_gain", value)
-        self.reader.save_state(state)
+        def update(state: AffectState) -> bool:
+            self._require_current_model(state)
+            self.tuning.set_override(state, "expression_gain", value)
+            return True
+
+        state, _changed = self.store.mutate_exact(
+            profile_id, session_id, update, expected_revision=expected_revision
+        )
         return state
 
-    def restore_expression_gain(self, profile_id: str, session_id: str) -> AffectState:
-        state = self._load_state(profile_id, session_id)
-        self._require_current_model(state)
-        if self.tuning.restore_configured(state, "expression_gain"):
-            self.reader.save_state(state)
-        return state
+    def restore_expression_gain(
+        self, profile_id: str, session_id: str, expected_revision: int
+    ) -> AffectState:
+        def update(state: AffectState) -> bool:
+            self._require_current_model(state)
+            return self.tuning.restore_configured(state, "expression_gain")
 
-    def _load_state(self, profile_id: str, session_id: str) -> AffectState:
-        state = self.reader.exact_state(profile_id, session_id)
-        if state is None:
-            raise LookupError("Selected affect state is unavailable")
+        state, _changed = self.store.mutate_exact(
+            profile_id, session_id, update, expected_revision=expected_revision
+        )
         return state
 
     @staticmethod

@@ -10,6 +10,11 @@ feature.application = (function () {
       state.response,
       state.refreshNow
     );
+    const manual = feature.manualStateController.useManualStateControls(
+      selection,
+      state.response,
+      state.refreshNow
+    );
 
     function selectSession(summary) {
       setSelection(feature.domain.exactSelection(summary.profileId, summary.sessionId));
@@ -33,10 +38,16 @@ feature.application = (function () {
       tuningConfiguration:
         state.response && state.response.state ? state.response.state.tuningConfiguration : null,
       tuningTarget: tuning.target,
+      controlsEnabled: Boolean(state.response && state.response.controlsEnabled),
       tuningStatus: tuning.status,
       tuningError: tuning.error,
       applyExpressionGain: tuning.applyExpressionGain,
       restoreExpressionGain: tuning.restoreExpressionGain,
+      manualTarget: manual.target,
+      manualPending: manual.pending,
+      manualResetToken: manual.resetToken,
+      manualStatusFor: manual.statusFor,
+      applyManualState: manual.apply,
       selectSession: selectSession,
       returnToLatest: returnToLatest,
       refreshSessions: catalog.refreshSessions,

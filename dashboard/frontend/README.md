@@ -6,10 +6,10 @@ for deployment but must not be edited in place.
 
 ```text
 frontend/src/
-├── application/      # focused state polling, catalog, and composition
+├── application/      # polling, catalog, tuning, and manual-edit controllers
 ├── domain/           # response normalization, bounds, scales, labels
 ├── infrastructure/   # authenticated Hermes dashboard API client
-├── presentation/     # selector, state view, SDK components, and styles
+├── presentation/     # selector, state view, tuning/manual controls, and styles
 └── index.js           # thin conditional registration boundary
 ```
 
@@ -23,6 +23,13 @@ with Refresh and Load more controls beside it. It cancels timers and rejects
 stale responses when selection changes, while retaining separate catalog and
 state errors.
 
+Editing controls appear only when the safe state response advertises
+`controls_enabled`; this requires both dashboard feature flags on the server.
+Manual edits submit one source field with the exact selected identity and
+displayed revision. Drafts survive ordinary polls, while target changes and
+revision conflicts reset them. A successful write queues an immediate state
+refresh even if a poll was already in flight.
+
 The deterministic build has no Node package dependencies:
 
 ```bash
@@ -31,5 +38,8 @@ python -m dashboard.tools.build_dashboard --check
 node frontend/tests/domain.test.js
 node frontend/tests/controller.test.js
 node frontend/tests/session_navigator.test.js
+node frontend/tests/manual_state_controller.test.js
+node frontend/tests/manual_state_presentation.test.js
+node frontend/tests/poll_refresh_queue.test.js
 node --check dist/index.js
 ```

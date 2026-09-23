@@ -20,6 +20,11 @@ treated as access to affect state.
 - affect processing and persistence continue normally;
 - no additional port is opened.
 
+`HERMES_AFFECT_DASHBOARD_CONTROLS` is a separate, default-off write gate. It
+has no effect unless the dashboard flag is also enabled. With it off, state and
+catalog reads work as before, the response advertises `controls_enabled: false`,
+and the browser hides all editing controls. Invalid values fail closed.
+
 An invalid flag value must fail closed and produce an administrative warning.
 
 ## Permitted response data
@@ -36,6 +41,8 @@ designed for `/affect state`:
 - active sensitivities, open conflicts, and tuning overrides.
 - configured and effective `expression_gain` values needed by the session
   tuning control.
+- A boolean `controls_enabled` capability so the browser can hide all
+  mutation controls while keeping read-only inspection available.
 
 The retained-session catalog exposes only bounded profile/session IDs, update
 time, revision, mood, posture, and model version. Exact state selection requires
@@ -62,10 +69,22 @@ The endpoint must never return:
 
 ## API constraints
 
-- State and catalog routes are `GET`; the only mutation routes are authenticated
-  exact-session apply/restore operations for `expression_gain`.
-- No calm, heat, reset, migration, raw affect, trait, relationship, sensitivity,
-  or conflict controls.
+- State and catalog routes are `GET`. Mutation routes are authenticated and
+  registered only when both dashboard flags are enabled.
+- The manual editor accepts only one JSON numeric source value at a time:
+  valence `[-1, 1]`; arousal, frustration, offended, atmosphere tension,
+  irritation, and unresolved tension `[0, 1]`; trust, affinity, and respect
+  `[-1, 1]`. Relationship edits require an existing participant ID in that
+  exact session.
+- Every edit requires exact profile/session identity and `expected_revision`.
+  The server rejects booleans, strings, non-finite values, unknown fields, and
+  values outside the allowlist/ranges. Writes re-read and mutate under the
+  state-file lock, after one elapsed-decay application.
+- The existing expression-gain apply/restore endpoints are under the same
+  write gate and revision check. They continue to share validation and mutation
+  behavior with `/affect tune`.
+- No calm, heat, reset, migration, raw expression-drive, trait, participant
+  creation, sensitivity, or independent conflict-projection controls.
 - Tuning values are bounded to `0.0` through `10.0`, and the shared service
   prevents unsupported fields from being changed.
 - Errors are bounded and omit state-file contents and paths.

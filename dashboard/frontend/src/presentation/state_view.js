@@ -26,7 +26,12 @@ feature.presentationStateView = (function () {
         { className: "ha-core__body" },
         e("span", { className: "ha-core__label" }, "Current mood"),
         e("strong", null, feature.domain.label(state.mood)),
-        e("span", { className: "ha-core__posture" }, feature.domain.label(state.posture))
+        e(
+          "span",
+          { className: "ha-core__posture" },
+          e("span", null, "Last response posture"),
+          e("strong", null, feature.domain.label(state.posture))
+        )
       )
     );
   }

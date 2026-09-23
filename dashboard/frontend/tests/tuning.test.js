@@ -42,17 +42,40 @@ const SDK = {
 };
 vm.runInNewContext(source("infrastructure/api.js"), { feature, SDK, URLSearchParams });
 const target = { profileId: "bot:one", sessionId: "session:one" };
-feature.infrastructure.setExpressionGain(target, 2.5);
-feature.infrastructure.restoreExpressionGain(target);
+feature.infrastructure.setExpressionGain(target, 2.5, 4);
+feature.infrastructure.restoreExpressionGain(target, 5);
+feature.infrastructure.applyManualState({
+  profile_id: "bot:one",
+  session_id: "session:one",
+  scope: "affect",
+  field: "valence",
+  value: 0.4,
+  expected_revision: 6,
+});
 
 assert.equal(JSON.stringify(calls), JSON.stringify([
   {
-    url: "/api/plugins/hermes-affect/tuning?profile_id=bot%3Aone&session_id=session%3Aone&expression_gain=2.5",
+    url: "/api/plugins/hermes-affect/tuning?profile_id=bot%3Aone&session_id=session%3Aone&expected_revision=4&expression_gain=2.5",
     options: { method: "POST" },
   },
   {
-    url: "/api/plugins/hermes-affect/tuning?profile_id=bot%3Aone&session_id=session%3Aone",
+    url: "/api/plugins/hermes-affect/tuning?profile_id=bot%3Aone&session_id=session%3Aone&expected_revision=5",
     options: { method: "DELETE" },
+  },
+  {
+    url: "/api/plugins/hermes-affect/controls",
+    options: {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        profile_id: "bot:one",
+        session_id: "session:one",
+        scope: "affect",
+        field: "valence",
+        value: 0.4,
+        expected_revision: 6,
+      }),
+    },
   },
 ]));
 

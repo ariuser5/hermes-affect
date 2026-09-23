@@ -20,6 +20,15 @@ feature.statePolling = (function () {
       return current;
     }
     const response = feature.domain.normalizeResponse(raw);
+    if (
+      response.available &&
+      current.response &&
+      current.response.available &&
+      feature.domain.sameSelection(current.responseSelection, request.selection) &&
+      response.state.revision < current.response.state.revision
+    ) {
+      return current;
+    }
     return {
       response: response,
       responseSelection: request.selection,
@@ -102,6 +111,8 @@ feature.statePolling = (function () {
         let cancelled = false;
         let timer = null;
         let inFlight = false;
+        let refreshAfterCurrentPoll = false;
+        let queuedRefreshWaiters = [];
         const request = {
           generation: generationRef.current + 1,
           selection: selection,
@@ -135,7 +146,20 @@ feature.statePolling = (function () {
             if (!cancelled && request.generation === generationRef.current) {
               setLoading(false);
               if (timer !== null) window.clearTimeout(timer);
-              timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+              if (refreshAfterCurrentPoll) {
+                refreshAfterCurrentPoll = false;
+                timer = null;
+                const waiters = queuedRefreshWaiters;
+                queuedRefreshWaiters = [];
+                setLoading(true);
+                poll().then(function () {
+                  waiters.forEach(function (resolve) {
+                    resolve();
+                  });
+                });
+              } else {
+                timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+              }
             }
           }
         }
@@ -145,7 +169,12 @@ feature.statePolling = (function () {
             window.clearTimeout(timer);
             timer = null;
           }
-          if (inFlight) return Promise.resolve();
+          if (inFlight) {
+            refreshAfterCurrentPoll = true;
+            return new Promise(function (resolve) {
+              queuedRefreshWaiters.push(resolve);
+            });
+          }
           setLoading(true);
           return poll();
         };
@@ -159,6 +188,10 @@ feature.statePolling = (function () {
         return function () {
           cancelled = true;
           if (timer !== null) window.clearTimeout(timer);
+          refreshAfterCurrentPoll = false;
+          queuedRefreshWaiters.splice(0).forEach(function (resolve) {
+            resolve();
+          });
           if (refreshRef.current === refresh) refreshRef.current = null;
         };
       },

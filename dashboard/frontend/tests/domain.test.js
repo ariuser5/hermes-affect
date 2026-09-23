@@ -11,6 +11,7 @@ vm.runInNewContext(source, { feature });
 
 const normalized = feature.domain.normalizeResponse({
   available: true,
+  controls_enabled: true,
   state: {
     profile_id: "bot:one",
     session_id: "session:one",
@@ -22,12 +23,14 @@ const normalized = feature.domain.normalizeResponse({
       overrides: { expression_gain: 2.5 },
     },
     affect: { valence: 4, arousal: -2, frustration: 0.5, offended: "bad" },
-    relationships: { "user:one": { trust: 2, irritation: 0.4 } },
+    perceived_atmosphere_tension: 0.25,
+    relationships: { "user:one": { trust: 2, irritation: 0.4, unresolved_tension: 0.6 } },
     open_conflicts: { "user:one": { heat: 0.7, status: "open" } },
   },
 });
 
 assert.equal(normalized.available, true);
+assert.equal(normalized.controlsEnabled, true);
 assert.equal(normalized.state.affect.valence, 1);
 assert.equal(normalized.state.affect.arousal, 0);
 assert.equal(normalized.state.affect.frustration, 0.5);
@@ -37,15 +40,17 @@ assert.equal(normalized.state.tuningConfiguration.configuredExpressionGain, 1);
 assert.equal(normalized.state.tuningConfiguration.effectiveExpressionGain, 2.5);
 assert.equal(normalized.state.tuningConfiguration.overrideExpressionGain, 2.5);
 assert.equal(normalized.state.relationships[0].trust, 1);
+assert.equal(normalized.state.relationships[0].unresolvedTension, 0.6);
+assert.equal(normalized.state.atmosphereSource, 0.25);
 assert.equal(feature.domain.percent(0, -1, 1), 50);
 assert.equal(feature.domain.label("counter_attack"), "Counter Attack");
 assert.equal(
   JSON.stringify(feature.domain.normalizeResponse({ available: false })),
-  JSON.stringify({ available: false, state: null }),
+  JSON.stringify({ available: false, state: null, controlsEnabled: false }),
 );
 assert.equal(
   JSON.stringify(feature.domain.normalizeResponse({ available: "true", state: {} })),
-  JSON.stringify({ available: false, state: null }),
+  JSON.stringify({ available: false, state: null, controlsEnabled: false }),
 );
 
 assert.equal(JSON.stringify(feature.domain.latestSelection()), JSON.stringify({ mode: "latest" }));

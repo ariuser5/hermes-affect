@@ -175,7 +175,9 @@ feature.presentationTuningControls = (function () {
       ]
     );
 
-    if (!configuration || !configuration.available || !model.tuningTarget) return null;
+    if (!model.controlsEnabled || !configuration || !configuration.available || !model.tuningTarget) {
+      return null;
+    }
 
     const value = parseDraft(draft);
     const saving = model.tuningStatus === "saving";

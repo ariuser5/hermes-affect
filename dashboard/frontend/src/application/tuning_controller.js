@@ -38,7 +38,7 @@ feature.tuningController = (function () {
       setStatus("saving");
       setError(null);
       try {
-        await feature.infrastructure.setExpressionGain(target, value);
+        await feature.infrastructure.setExpressionGain(target, value, response.state.revision);
         setStatus("saved");
         await refreshState();
       } catch (requestError) {
@@ -52,7 +52,7 @@ feature.tuningController = (function () {
       setStatus("saving");
       setError(null);
       try {
-        await feature.infrastructure.restoreExpressionGain(target);
+        await feature.infrastructure.restoreExpressionGain(target, response.state.revision);
         setStatus("saved");
         await refreshState();
       } catch (requestError) {

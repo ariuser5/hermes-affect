@@ -231,9 +231,11 @@ The optional dashboard reuses this same current-state projection. Its thin
 FastAPI adapter reads the newest valid state available to one Hermes container,
 and its browser page polls through Hermes' authenticated plugin route. The
 feature is independently gated by `HERMES_AFFECT_DASHBOARD`, defaults off,
-adds no listener or Docker port, and exposes only exact-session
-`expression_gain` apply/restore routes. Cross-container aggregation, broader
-mutation, and historical charts remain outside this design. See
+and adds no listener or Docker port. All writes additionally require the
+default-off `HERMES_AFFECT_DASHBOARD_CONTROLS` gate and are limited to exact
+sessions: expression-gain tuning plus allowlisted affect, atmosphere, and
+existing-participant relationship source values. Cross-container aggregation,
+other mutation, and historical charts remain outside this design. See
 [`../dashboard/README.md`](../dashboard/README.md).
 
 ## Deferred interests and conversational effort

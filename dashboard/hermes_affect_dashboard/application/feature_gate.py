@@ -9,6 +9,7 @@ from collections.abc import Mapping
 logger = logging.getLogger("hermes-affect.dashboard")
 
 DASHBOARD_FEATURE_ENV = "HERMES_AFFECT_DASHBOARD"
+DASHBOARD_CONTROLS_ENV = "HERMES_AFFECT_DASHBOARD_CONTROLS"
 TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 FALSE_VALUES = frozenset({"", "0", "false", "no", "off"})
 
@@ -33,3 +34,22 @@ def dashboard_feature_enabled(environ: Mapping[str, str] | None = None) -> bool:
         logger.warning("%s", warning)
     return enabled
 
+
+def dashboard_controls_enabled(
+    environ: Mapping[str, str] | None = None,
+    *,
+    dashboard_enabled: bool | None = None,
+) -> bool:
+    """Enable mutations only when both dashboard and explicit controls flags are on."""
+
+    values = os.environ if environ is None else environ
+    dashboard = (
+        dashboard_feature_enabled(values) if dashboard_enabled is None else dashboard_enabled
+    )
+    enabled, warning = parse_feature_flag(values.get(DASHBOARD_CONTROLS_ENV))
+    if warning:
+        logger.warning(
+            "Invalid %s value; dashboard controls remain disabled",
+            DASHBOARD_CONTROLS_ENV,
+        )
+    return dashboard and enabled

@@ -14,10 +14,11 @@ state available inside the current Hermes container. The page also provides a
 compact session selector so an authenticated dashboard user can select a
 retained session and inspect that session's persisted affect snapshot.
 
-The selected session is a snapshot selector, not a timeline. Historical charts,
-cross-container aggregation, and broad state mutation remain out of scope.
-The separate session-scoped `expression_gain` tuning control is documented in
-the dashboard implementation plan.
+The selected session is a snapshot selector, not a timeline. Historical charts
+and cross-container aggregation remain out of scope. The navigation work itself
+does not change the read-only selector contract; the separately gated narrow
+manual controls are documented in
+[`SESSION_STATE_CONTROLS_PLAN.md`](SESSION_STATE_CONTROLS_PLAN.md).
 
 ## Required behavior
 
@@ -248,8 +249,9 @@ task.
 
 - Both new read forms stay behind Hermes dashboard authentication and the
   existing `HERMES_AFFECT_DASHBOARD` gate.
-- Keep state and catalog routes read-only; any mutation must remain limited to
-  the separately reviewed exact-session tuning control.
+- Keep the navigation selector and catalog read-only. Any mutation belongs to
+  the separately gated exact-session controls in
+  [`SESSION_STATE_CONTROLS_PLAN.md`](SESSION_STATE_CONTROLS_PLAN.md).
 - Never accept a filesystem path from the browser.
 - Verify exact parsed profile/session identity after resolving the sanitized
   storage path.
@@ -347,8 +349,9 @@ never loses the chosen identity during polling.
 - Cross-container/all-bot aggregation.
 - Conversation titles or transcript lookup through private Hermes APIs.
 - URL deep links and browser-persisted selection.
-- Dashboard mutations such as calm, heat, reset, migrate, delete, or tuning
-  fields beyond the supported `expression_gain` override.
+- Moderation/reset/migration operations, broad state mutation, and controls
+  beyond the session tuning and manual source-value allowlists documented in
+  [`SESSION_STATE_CONTROLS_PLAN.md`](SESSION_STATE_CONTROLS_PLAN.md).
 - Automatic caching/index files before catalog performance is measured.
 
 ## Luna handoff order

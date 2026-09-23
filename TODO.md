@@ -71,6 +71,12 @@ influence designs; old checkmarks do not assert those old interfaces remain.
       local backend, controller, presentation, asset, test, and documentation
       phases are complete, while live Hermes visual and packaged-extension
       checks remain.
+- [x] Implement editable manual source-value controls for affect,
+      atmosphere, and existing participant relationships behind
+      `HERMES_AFFECT_DASHBOARD_CONTROLS`; verify locked runtime updates,
+      revision conflicts, frontend behavior, generated assets, Ruff, and the
+      complete repository test suite. See
+      `dashboard/SESSION_STATE_CONTROLS_PLAN.md`.
 
 Acceptance criteria:
 
@@ -78,8 +84,9 @@ Acceptance criteria:
 - Disabled or invalid feature-gate values disclose no state and register no
   dashboard tab.
 - The routes remain behind Hermes' dashboard authentication and publish no
-  extra port; dashboard writes are limited to exact-session `expression_gain`
-  apply/restore operations.
+  extra port; all writes require the separate default-off controls gate and
+  are limited to exact-session expression-gain and documented manual source
+  operations.
 - One container exposes only its latest valid local state; cross-container
   aggregation and historical charts remain deferred.
 - Exact continuation status is maintained in `dashboard/PLAN.md`.

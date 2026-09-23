@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import math
 import tempfile
+import threading
 import unittest
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
@@ -12,6 +13,7 @@ from pathlib import Path
 
 from hermes_affect.application.classification.deterministic.classifier import EventClassifier
 from hermes_affect.application.classification.targeting import route_events
+from hermes_affect.application.manual_state import ManualStateControlService
 from hermes_affect.application.session_runtime import AffectRuntime
 from hermes_affect.domain.calculations import effective_expression_drive, event_severity
 from hermes_affect.domain.configuration import Sensitivity, neutral_config
@@ -220,6 +222,110 @@ class ModelBehaviorTests(unittest.TestCase):
 
 
 class SnapshotAndMigrationTests(unittest.TestCase):
+    def test_dashboard_edit_during_classification_survives_final_turn_save(self):
+        with tempfile.TemporaryDirectory() as root:
+            now = datetime(2026, 9, 22, 12, tzinfo=timezone.utc)
+            runtime = AffectRuntime(
+                FakeHermesContext(state_dir=root, soul_path=Path(root) / "absent")
+            )
+            runtime._now = lambda: now
+            state = AffectState.initial("a", "s")
+            state.updated_at = now.isoformat()
+            runtime.store.save(state)
+            classification_started = threading.Event()
+            continue_classification = threading.Event()
+            original_classify = runtime.classifier.classify
+
+            def delayed_classify(*args, **kwargs):
+                classification_started.set()
+                if not continue_classification.wait(timeout=5):
+                    raise TimeoutError("classification test synchronization timed out")
+                return original_classify(*args, **kwargs)
+
+            runtime.classifier.classify = delayed_classify
+            errors: list[BaseException] = []
+
+            def process_turn() -> None:
+                try:
+                    runtime.pre_llm_call(
+                        profile_id="a",
+                        session_id="s",
+                        turn_id="turn-1",
+                        sender_id="user:one",
+                        user_message="ordinary neutral message",
+                    )
+                except BaseException as error:
+                    errors.append(error)
+
+            worker = threading.Thread(target=process_turn)
+            worker.start()
+            self.assertTrue(classification_started.wait(timeout=5))
+            ManualStateControlService(runtime.store, now=lambda: now).apply(
+                profile_id="a",
+                session_id="s",
+                scope="affect",
+                field="valence",
+                value=0.77,
+                expected_revision=0,
+            )
+            continue_classification.set()
+            worker.join(timeout=5)
+
+            self.assertFalse(worker.is_alive())
+            self.assertEqual(errors, [])
+            updated = runtime.store.load_exact("a", "s")
+            assert updated is not None
+            self.assertAlmostEqual(updated.valence, 0.77)
+            self.assertEqual(updated.revision, 2)
+            self.assertEqual(updated.last_turn_id, "turn-1")
+
+    def test_lifecycle_timestamp_save_reloads_latest_manual_edit(self):
+        with tempfile.TemporaryDirectory() as root:
+            now = datetime(2026, 9, 22, 12, tzinfo=timezone.utc)
+            runtime = AffectRuntime(
+                FakeHermesContext(state_dir=root, soul_path=Path(root) / "absent")
+            )
+            runtime._now = lambda: now
+            state = AffectState.initial("a", "s")
+            state.updated_at = now.isoformat()
+            runtime.store.save(state)
+            snapshot_loaded = threading.Event()
+            continue_lifecycle = threading.Event()
+            original_config = runtime._config_for_state
+            first_call = True
+
+            def pause_after_snapshot(loaded_state):
+                nonlocal first_call
+                if first_call:
+                    first_call = False
+                    snapshot_loaded.set()
+                    if not continue_lifecycle.wait(timeout=5):
+                        raise TimeoutError("lifecycle test synchronization timed out")
+                return original_config(loaded_state)
+
+            runtime._config_for_state = pause_after_snapshot
+            worker = threading.Thread(
+                target=lambda: runtime.post_llm_call(profile_id="a", session_id="s")
+            )
+            worker.start()
+            self.assertTrue(snapshot_loaded.wait(timeout=5))
+            ManualStateControlService(runtime.store, now=lambda: now).apply(
+                profile_id="a",
+                session_id="s",
+                scope="atmosphere",
+                field="atmosphere_tension",
+                value=0.63,
+                expected_revision=0,
+            )
+            continue_lifecycle.set()
+            worker.join(timeout=5)
+
+            self.assertFalse(worker.is_alive())
+            updated = runtime.store.load_exact("a", "s")
+            assert updated is not None
+            self.assertAlmostEqual(updated.atmosphere_tension, 0.63)
+            self.assertEqual(updated.revision, 1)
+
     def test_documented_fenced_soul_does_not_consume_surrounding_prose(self):
         path = Path(__file__).parents[1] / "examples" / "soul" / "basic.md"
         config, warnings = parse_soul_affect(path.read_text(encoding="utf-8"))

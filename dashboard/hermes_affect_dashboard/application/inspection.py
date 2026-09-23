@@ -24,7 +24,11 @@ class DashboardInspectionService:
         self.reader = reader
 
     def current_state(
-        self, profile_id: str | None = None, session_id: str | None = None
+        self,
+        profile_id: str | None = None,
+        session_id: str | None = None,
+        *,
+        controls_enabled: bool = False,
     ) -> DashboardStateResponse:
         if (profile_id is None) != (session_id is None):
             raise ValueError("profile_id and session_id must be provided together")
@@ -34,9 +38,13 @@ class DashboardInspectionService:
             else self.reader.exact_state(profile_id, session_id or "")
         )
         if state is None:
-            return {"available": False, "state": None}
+            return {"available": False, "state": None, "controls_enabled": controls_enabled}
 
         config, warnings = resolve_state_config(state)
         for warning in warnings:
             logger.warning("Saved affect configuration: %s", warning)
-        return {"available": True, "state": state_snapshot(state, config)}
+        return {
+            "available": True,
+            "state": state_snapshot(state, config),
+            "controls_enabled": controls_enabled,
+        }

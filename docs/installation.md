@@ -128,12 +128,21 @@ dashboard process:
 HERMES_AFFECT_DASHBOARD: "1"
 ```
 
+Read-only inspection is available with that flag alone. Session tuning and
+manual state controls require the additional opt-in below; it defaults off:
+
+```yaml
+HERMES_AFFECT_DASHBOARD_CONTROLS: "1"
+```
+
 The extension uses the existing authenticated dashboard listener and port. Do
 not add a sidecar, new host port, or broader state mount. It reads the same
 `HERMES_AFFECT_STATE_DIR` as the plugin, falling back to
-`<HERMES_HOME>/affect-state`. Its authenticated dashboard controls write only
-the selected session's supported `expression_gain` override or restore it;
-they do not change SOUL configuration or other sessions.
+`<HERMES_HOME>/affect-state`. With both flags enabled, authenticated dashboard
+controls update only the selected session's supported `expression_gain` or
+allowlisted affect, atmosphere, and existing-participant relationship source
+values. They do not change SOUL configuration or other sessions. The manual
+editor applies elapsed passive decay once before assigning the selected value.
 
 Rebuild and check committed browser assets before installing a source change:
 

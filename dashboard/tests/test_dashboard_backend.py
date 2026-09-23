@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from dashboard.hermes_affect_dashboard.application.feature_gate import (
+    dashboard_controls_enabled,
     dashboard_feature_enabled,
     parse_feature_flag,
 )
@@ -29,8 +30,12 @@ from dashboard.hermes_affect_dashboard.infrastructure.state_reader import (
     resolve_state_root,
 )
 from hermes_affect.application.inspection import resolve_state_config, state_snapshot
+from hermes_affect.application.manual_state import ManualStateControlService
 from hermes_affect.domain.state import AffectState, ParticipantRelation
-from hermes_affect.infrastructure.persistence.json_store import StateStore
+from hermes_affect.infrastructure.persistence.json_store import (
+    StateRevisionConflict,
+    StateStore,
+)
 
 REPOSITORY_ROOT = Path(__file__).parents[2]
 
@@ -53,6 +58,33 @@ class FeatureGateTests(unittest.TestCase):
         self.assertIn("remains disabled", warning or "")
         with self.assertLogs("hermes-affect.dashboard", level="WARNING"):
             self.assertFalse(dashboard_feature_enabled({"HERMES_AFFECT_DASHBOARD": "invalid"}))
+
+    def test_controls_are_default_off_and_require_dashboard_flag(self) -> None:
+        self.assertFalse(dashboard_controls_enabled({"HERMES_AFFECT_DASHBOARD": "1"}))
+        self.assertFalse(
+            dashboard_controls_enabled(
+                {
+                    "HERMES_AFFECT_DASHBOARD": "0",
+                    "HERMES_AFFECT_DASHBOARD_CONTROLS": "1",
+                }
+            )
+        )
+        self.assertTrue(
+            dashboard_controls_enabled(
+                {
+                    "HERMES_AFFECT_DASHBOARD": "1",
+                    "HERMES_AFFECT_DASHBOARD_CONTROLS": "1",
+                }
+            )
+        )
+        self.assertFalse(
+            dashboard_controls_enabled(
+                {
+                    "HERMES_AFFECT_DASHBOARD": "1",
+                    "HERMES_AFFECT_DASHBOARD_CONTROLS": "invalid",
+                }
+            )
+        )
 
 
 class InspectionTests(unittest.TestCase):
@@ -309,7 +341,10 @@ class SessionSummaryTests(unittest.TestCase):
 
         response = DashboardInspectionService(EmptyReader()).current_state()
 
-        self.assertEqual(response, {"available": False, "state": None})
+        self.assertEqual(
+            response,
+            {"available": False, "state": None, "controls_enabled": False},
+        )
 
     def test_service_returns_shared_projection(self) -> None:
         state = AffectState.initial("bot:one", "session:one")
@@ -327,37 +362,31 @@ class SessionSummaryTests(unittest.TestCase):
 
 class DashboardTuningServiceTests(unittest.TestCase):
     def test_mutation_is_saved_only_to_the_selected_exact_session(self) -> None:
-        selected = AffectState.initial("bot:one", "session:one")
-        other = AffectState.initial("bot:one", "session:two")
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            selected = AffectState.initial("bot:one", "session:one")
+            other = AffectState.initial("bot:one", "session:two")
+            store.save(selected)
+            store.save(other)
+            service = DashboardTuningService(store)
 
-        class Reader:
-            def __init__(self) -> None:
-                self.saved: list[AffectState] = []
+            service.set_expression_gain("bot:one", "session:one", 3.5, 0)
+            self.assertEqual(
+                store.load_exact("bot:one", "session:one").tuning_overrides,
+                {"expression_gain": 3.5},
+            )
+            self.assertEqual(store.load_exact("bot:one", "session:two").tuning_overrides, {})
+            self.assertEqual(store.load_exact("bot:one", "session:one").revision, 1)
 
-            def exact_state(self, profile_id: str, session_id: str) -> AffectState | None:
-                return {
-                    (selected.profile_id, selected.session_id): selected,
-                    (other.profile_id, other.session_id): other,
-                }.get((profile_id, session_id))
-
-            def save_state(self, state: AffectState) -> None:
-                self.saved.append(state)
-
-        reader = Reader()
-        service = DashboardTuningService(reader)
-
-        service.set_expression_gain("bot:one", "session:one", 3.5)
-        self.assertEqual(selected.tuning_overrides, {"expression_gain": 3.5})
-        self.assertEqual(other.tuning_overrides, {})
-        self.assertEqual(reader.saved, [selected])
-
-        service.restore_expression_gain("bot:one", "session:one")
-        self.assertEqual(selected.tuning_overrides, {})
-        self.assertEqual(reader.saved, [selected, selected])
+            service.restore_expression_gain("bot:one", "session:one", 1)
+            self.assertEqual(store.load_exact("bot:one", "session:one").tuning_overrides, {})
+            self.assertEqual(store.load_exact("bot:one", "session:one").revision, 2)
+            with self.assertRaises(StateRevisionConflict):
+                service.set_expression_gain("bot:one", "session:one", 4.0, 1)
 
 
 class PluginApiAdapterTests(unittest.TestCase):
-    def _load_adapter(self, *, enabled: str) -> types.ModuleType:
+    def _load_adapter(self, *, enabled: str, controls: str = "0") -> types.ModuleType:
         class FakeRouter:
             def __init__(self) -> None:
                 self.routes: list[tuple[str, str, object]] = []
@@ -396,7 +425,14 @@ class PluginApiAdapterTests(unittest.TestCase):
         module = importlib.util.module_from_spec(spec)
         with (
             patch.dict(sys.modules, {"fastapi": fake_fastapi, module_name: module}),
-            patch.dict(os.environ, {"HERMES_AFFECT_DASHBOARD": enabled}, clear=False),
+            patch.dict(
+                os.environ,
+                {
+                    "HERMES_AFFECT_DASHBOARD": enabled,
+                    "HERMES_AFFECT_DASHBOARD_CONTROLS": controls,
+                },
+                clear=False,
+            ),
         ):
             spec.loader.exec_module(module)
         return module
@@ -422,9 +458,19 @@ class PluginApiAdapterTests(unittest.TestCase):
             )
         self.assertEqual(raised.exception.status_code, 404)
 
-    def test_enabled_adapter_registers_state_catalog_and_tuning_routes(self) -> None:
+    def test_enabled_adapter_registers_reads_but_not_mutations_by_default(self) -> None:
         module = self._load_adapter(enabled="1")
 
+        self.assertEqual(
+            [(method, path) for method, path, _callback in module.router.routes],
+            [("GET", "/state"), ("GET", "/sessions")],
+        )
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.apply_manual_state({}))
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_mutation_routes_require_both_flags(self) -> None:
+        module = self._load_adapter(enabled="1", controls="1")
         self.assertEqual(
             [(method, path) for method, path, _callback in module.router.routes],
             [
@@ -432,6 +478,7 @@ class PluginApiAdapterTests(unittest.TestCase):
                 ("GET", "/sessions"),
                 ("POST", "/tuning"),
                 ("DELETE", "/tuning"),
+                ("POST", "/controls"),
             ],
         )
 
@@ -439,13 +486,16 @@ class PluginApiAdapterTests(unittest.TestCase):
         module = self._load_adapter(enabled="1")
 
         class Inspection:
-            def current_state(self) -> dict:
-                return {"available": False, "state": None}
+            def current_state(self, profile_id=None, session_id=None, **_kwargs) -> dict:
+                return {"available": False, "state": None, "controls_enabled": False}
 
         module._INSPECTION = Inspection()
         response = asyncio.run(module.get_current_state())
 
-        self.assertEqual(response, {"available": False, "state": None})
+        self.assertEqual(
+            response,
+            {"available": False, "state": None, "controls_enabled": False},
+        )
 
     def test_partial_selection_is_rejected(self) -> None:
         module = self._load_adapter(enabled="1")
@@ -486,7 +536,7 @@ class PluginApiAdapterTests(unittest.TestCase):
         module = self._load_adapter(enabled="1")
 
         class Inspection:
-            def current_state(self, profile_id=None, session_id=None) -> dict:
+            def current_state(self, profile_id=None, session_id=None, **_kwargs) -> dict:
                 if (profile_id, session_id) == ("bot:one", "session:one"):
                     return {
                         "available": True,
@@ -508,18 +558,18 @@ class PluginApiAdapterTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 404)
 
     def test_tuning_routes_use_dashboard_service_and_return_exact_snapshot(self) -> None:
-        module = self._load_adapter(enabled="1")
-        calls: list[tuple[str, str, object]] = []
+        module = self._load_adapter(enabled="1", controls="1")
+        calls: list[tuple[object, ...]] = []
 
         class Tuning:
-            def set_expression_gain(self, profile_id, session_id, value):
-                calls.append(("set", profile_id, value))
+            def set_expression_gain(self, profile_id, session_id, value, expected_revision):
+                calls.append(("set", profile_id, value, expected_revision))
 
-            def restore_expression_gain(self, profile_id, session_id):
-                calls.append(("restore", profile_id, session_id))
+            def restore_expression_gain(self, profile_id, session_id, expected_revision):
+                calls.append(("restore", profile_id, session_id, expected_revision))
 
         class Inspection:
-            def current_state(self, profile_id=None, session_id=None):
+            def current_state(self, profile_id=None, session_id=None, **_kwargs):
                 return {
                     "available": True,
                     "state": {"profile_id": profile_id, "session_id": session_id},
@@ -529,19 +579,126 @@ class PluginApiAdapterTests(unittest.TestCase):
         module._INSPECTION = Inspection()
         selected = asyncio.run(
             module.set_expression_gain(
-                profile_id="bot:one", session_id="session:one", expression_gain=2.5
+                profile_id="bot:one",
+                session_id="session:one",
+                expression_gain=2.5,
+                expected_revision=4,
             )
         )
         restored = asyncio.run(
-            module.restore_expression_gain(profile_id="bot:one", session_id="session:one")
+            module.restore_expression_gain(
+                profile_id="bot:one", session_id="session:one", expected_revision=5
+            )
         )
 
         self.assertEqual(
             calls,
-            [("set", "bot:one", 2.5), ("restore", "bot:one", "session:one")],
+            [
+                ("set", "bot:one", 2.5, 4),
+                ("restore", "bot:one", "session:one", 5),
+            ],
         )
         self.assertEqual(selected["state"]["session_id"], "session:one")
         self.assertEqual(restored["state"]["profile_id"], "bot:one")
+
+    def test_manual_control_route_validates_payload_and_returns_safe_snapshot(self) -> None:
+        module = self._load_adapter(enabled="1", controls="1")
+        calls: list[dict[str, object]] = []
+
+        class Controls:
+            def apply(self, **kwargs):
+                calls.append(kwargs)
+
+        class Inspection:
+            def current_state(self, profile_id=None, session_id=None, **kwargs):
+                return {
+                    "available": True,
+                    "state": {"profile_id": profile_id, "session_id": session_id},
+                    "controls_enabled": kwargs["controls_enabled"],
+                }
+
+        module._MANUAL_CONTROLS = Controls()
+        module._INSPECTION = Inspection()
+        payload = {
+            "profile_id": "profile:one",
+            "session_id": "session:one",
+            "scope": "relationship",
+            "field": "trust",
+            "participant_id": "user:full-id",
+            "value": 0.6,
+            "expected_revision": 3,
+        }
+        response = asyncio.run(module.apply_manual_state(payload))
+
+        self.assertEqual(calls, [payload])
+        self.assertEqual(response["state"]["session_id"], "session:one")
+        self.assertTrue(response["controls_enabled"])
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.apply_manual_state({**payload, "private_payload": "not accepted"}))
+        self.assertEqual(raised.exception.status_code, 422)
+        self.assertNotIn("not accepted", raised.exception.detail)
+
+    def test_manual_control_maps_revision_and_missing_state_errors(self) -> None:
+        module = self._load_adapter(enabled="1", controls="1")
+        payload = {
+            "profile_id": "profile:one",
+            "session_id": "session:one",
+            "scope": "affect",
+            "field": "valence",
+            "value": 0.4,
+            "expected_revision": 3,
+        }
+
+        class Controls:
+            error: Exception
+
+            def apply(self, **_kwargs):
+                raise self.error
+
+        controls = Controls()
+        module._MANUAL_CONTROLS = controls
+        controls.error = StateRevisionConflict("private path must not escape")
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.apply_manual_state(payload))
+        self.assertEqual(raised.exception.status_code, 409)
+        self.assertNotIn("private path", raised.exception.detail)
+
+        controls.error = LookupError("Selected participant is unavailable")
+        with self.assertRaises(module.HTTPException) as raised:
+            asyncio.run(module.apply_manual_state(payload))
+        self.assertEqual(raised.exception.status_code, 404)
+
+    def test_manual_control_endpoint_enforces_strict_json_numbers(self) -> None:
+        module = self._load_adapter(enabled="1", controls="1")
+        with tempfile.TemporaryDirectory() as temporary:
+            store = StateStore(temporary)
+            state = AffectState.initial("profile:one", "session:one")
+            state.relationships["user:one"] = ParticipantRelation()
+            store.save(state)
+            module._MANUAL_CONTROLS = ManualStateControlService(store)
+            module._INSPECTION = DashboardInspectionService(FileStateReader(temporary))
+            payload = {
+                "profile_id": "profile:one",
+                "session_id": "session:one",
+                "scope": "relationship",
+                "field": "trust",
+                "participant_id": "user:one",
+                "value": 0.5,
+                "expected_revision": 0,
+            }
+
+            for invalid in (True, "0.5", 1.5):
+                with self.subTest(value=invalid), self.assertRaises(module.HTTPException) as raised:
+                    asyncio.run(module.apply_manual_state({**payload, "value": invalid}))
+                self.assertEqual(raised.exception.status_code, 422)
+                self.assertNotIn("path", raised.exception.detail.casefold())
+
+            response = asyncio.run(module.apply_manual_state(payload))
+            updated = store.load_exact("profile:one", "session:one")
+            assert updated is not None
+            self.assertTrue(response["controls_enabled"])
+            self.assertEqual(updated.relationships["user:one"].trust, 0.5)
+            self.assertEqual(updated.revision, 1)
 
 
 if __name__ == "__main__":

@@ -30,6 +30,7 @@ vm.runInNewContext(source("presentation/tuning_controls.js"), { feature, SDK });
 
 const tree = feature.presentationTuningControls.TuningControls({
   model: {
+    controlsEnabled: true,
     tuningTarget: { profileId: "bot:one", sessionId: "session:one" },
     tuningStatus: null,
     tuningError: null,

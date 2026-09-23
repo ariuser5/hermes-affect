@@ -4,6 +4,7 @@ feature.presentation = (function () {
   const stateView = feature.presentationStateView;
   const navigator = feature.presentationSessionNavigator;
   const tuning = feature.presentationTuningControls;
+  const manualControls = feature.presentationManualStateControls;
 
   function selectionPanel(model) {
     if (model.selectedStateLoading) {
@@ -42,7 +43,18 @@ feature.presentation = (function () {
           ? stateView.renderState(
               model.response.state,
               model.hasError,
-              e(tuning.TuningControls, { model: model, state: model.response.state })
+              e(
+                "div",
+                { className: "ha-state-editors" },
+                e(manualControls.ManualStateControls, {
+                  key: model.manualTarget
+                    ? model.manualTarget.profileId + "\u0000" + model.manualTarget.sessionId
+                    : "no-target",
+                  model: model,
+                  state: model.response.state,
+                }),
+                e(tuning.TuningControls, { model: model, state: model.response.state })
+              )
             )
           : selectionPanel(model);
       return e(

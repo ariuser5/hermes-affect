@@ -7,7 +7,7 @@ import math
 import os
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -16,6 +16,14 @@ from pathlib import Path
 from ...domain.state import AffectState
 
 DEFAULT_ABANDONED_STATE_DAYS = 90
+
+
+class ExactStateUnavailable(LookupError):
+    """The requested exact state is missing, malformed, or has another identity."""
+
+
+class StateRevisionConflict(Exception):
+    """The exact state changed after the caller read its revision."""
 
 
 @dataclass(frozen=True)
@@ -92,6 +100,41 @@ class StateStore:
         if state.profile_id != profile_id or state.session_id != session_id:
             return None
         return state
+
+    def mutate_exact(
+        self,
+        profile_id: str,
+        session_id: str,
+        mutation: Callable[[AffectState], bool],
+        *,
+        expected_revision: int | None = None,
+    ) -> tuple[AffectState, bool]:
+        """Re-read, validate, mutate, and atomically save one exact state under one lock.
+
+        The mutation callback returns whether the state changed and must not
+        perform I/O or call external services while the lock is held.
+        """
+
+        if expected_revision is not None and (
+            isinstance(expected_revision, bool)
+            or not isinstance(expected_revision, int)
+            or not 0 <= expected_revision <= 2**53 - 1
+        ):
+            raise ValueError("expected_revision must be a non-negative safe integer")
+
+        with self.locked(profile_id, session_id) as path:
+            try:
+                state = self._load_path(path)
+            except (FileNotFoundError, KeyError, OSError, TypeError, ValueError) as error:
+                raise ExactStateUnavailable("Selected affect state is unavailable") from error
+            if state.profile_id != profile_id or state.session_id != session_id:
+                raise ExactStateUnavailable("Selected affect state is unavailable")
+            if expected_revision is not None and state.revision != expected_revision:
+                raise StateRevisionConflict("Selected affect state changed; refresh and review it")
+            changed = mutation(state)
+            if changed:
+                self._write_path(path, state)
+            return state, changed
 
     def latest_for_profile(self, profile_id: str) -> AffectState | None:
         """Load the most recently updated valid session for a profile."""
@@ -222,23 +265,27 @@ class StateStore:
 
     def save(self, state: AffectState) -> Path:
         path = self.state_path(state.profile_id, state.session_id)
-        path.parent.mkdir(parents=True, exist_ok=True)
         with StateFileLock(path.with_suffix(path.suffix + ".lock")):
-            fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+            return self._write_path(path, state)
+
+    @staticmethod
+    def _write_path(path: Path, state: AffectState) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fd, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(state.to_dict(), handle, indent=2, sort_keys=True)
+                handle.write("\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_name, path)
             try:
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump(state.to_dict(), handle, indent=2, sort_keys=True)
-                    handle.write("\n")
-                    handle.flush()
-                    os.fsync(handle.fileno())
-                os.replace(temporary_name, path)
-                try:
-                    os.chmod(path, 0o600)
-                except OSError:
-                    pass
-                return path
-            finally:
-                try:
-                    os.unlink(temporary_name)
-                except FileNotFoundError:
-                    pass
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+        finally:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
+        return path

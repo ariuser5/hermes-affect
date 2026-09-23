@@ -8,4 +8,4 @@ from typing import Any, TypedDict
 class DashboardStateResponse(TypedDict):
     available: bool
     state: dict[str, Any] | None
-
+    controls_enabled: bool

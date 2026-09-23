@@ -69,6 +69,7 @@ feature.domain = (function () {
       irritation: finite(relation.irritation, 0, 1, 0),
       respect: finite(relation.respect, -1, 1, 0),
       tension: finite(relation.unresolved_tension, 0, 1, 0),
+      unresolvedTension: finite(relation.unresolved_tension, 0, 1, 0),
     };
   }
 
@@ -89,13 +90,14 @@ feature.domain = (function () {
       typeof response.state !== "object" ||
       Array.isArray(response.state)
     ) {
-      return { available: false, state: null };
+      return { available: false, state: null, controlsEnabled: response.controls_enabled === true };
     }
 
     const state = objectOrEmpty(response.state);
     const affect = objectOrEmpty(state.affect);
     return {
       available: true,
+      controlsEnabled: response.controls_enabled === true,
       state: {
         profileId: text(state.profile_id, "unknown"),
         sessionId: text(state.session_id, "unknown"),
@@ -110,6 +112,7 @@ feature.domain = (function () {
             ? null
             : finite(state.expression_drive, 0, 1, 0),
         atmosphere: finite(state.perceived_atmosphere_tension, 0, 1, 0),
+        atmosphereSource: finite(state.perceived_atmosphere_tension, 0, 1, 0),
         affect: {
           valence: finite(affect.valence, -1, 1, 0),
           arousal: finite(affect.arousal, 0, 1, 0),
@@ -269,6 +272,7 @@ feature.infrastructure = (function () {
   const ENDPOINT = "/api/plugins/hermes-affect/state";
   const SESSIONS_ENDPOINT = "/api/plugins/hermes-affect/sessions";
   const TUNING_ENDPOINT = "/api/plugins/hermes-affect/tuning";
+  const CONTROLS_ENDPOINT = "/api/plugins/hermes-affect/controls";
 
   function loadState(selection) {
     const params = new URLSearchParams();
@@ -287,22 +291,31 @@ feature.infrastructure = (function () {
     return SDK.fetchJSON(SESSIONS_ENDPOINT + "?" + params.toString());
   }
 
-  function tuningQuery(target) {
+  function tuningQuery(target, revision) {
     const params = new URLSearchParams();
     params.set("profile_id", target.profileId);
     params.set("session_id", target.sessionId);
+    params.set("expected_revision", String(revision));
     return params;
   }
 
-  function setExpressionGain(target, value) {
-    const params = tuningQuery(target);
+  function setExpressionGain(target, value, revision) {
+    const params = tuningQuery(target, revision);
     params.set("expression_gain", String(value));
     return SDK.fetchJSON(TUNING_ENDPOINT + "?" + params.toString(), { method: "POST" });
   }
 
-  function restoreExpressionGain(target) {
-    const params = tuningQuery(target);
+  function restoreExpressionGain(target, revision) {
+    const params = tuningQuery(target, revision);
     return SDK.fetchJSON(TUNING_ENDPOINT + "?" + params.toString(), { method: "DELETE" });
+  }
+
+  function applyManualState(payload) {
+    return SDK.fetchJSON(CONTROLS_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
   }
 
   return {
@@ -310,6 +323,7 @@ feature.infrastructure = (function () {
     loadSessions: loadSessions,
     setExpressionGain: setExpressionGain,
     restoreExpressionGain: restoreExpressionGain,
+    applyManualState: applyManualState,
   };
 })();
 
@@ -335,6 +349,15 @@ feature.statePolling = (function () {
       return current;
     }
     const response = feature.domain.normalizeResponse(raw);
+    if (
+      response.available &&
+      current.response &&
+      current.response.available &&
+      feature.domain.sameSelection(current.responseSelection, request.selection) &&
+      response.state.revision < current.response.state.revision
+    ) {
+      return current;
+    }
     return {
       response: response,
       responseSelection: request.selection,
@@ -417,6 +440,8 @@ feature.statePolling = (function () {
         let cancelled = false;
         let timer = null;
         let inFlight = false;
+        let refreshAfterCurrentPoll = false;
+        let queuedRefreshWaiters = [];
         const request = {
           generation: generationRef.current + 1,
           selection: selection,
@@ -450,7 +475,20 @@ feature.statePolling = (function () {
             if (!cancelled && request.generation === generationRef.current) {
               setLoading(false);
               if (timer !== null) window.clearTimeout(timer);
-              timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+              if (refreshAfterCurrentPoll) {
+                refreshAfterCurrentPoll = false;
+                timer = null;
+                const waiters = queuedRefreshWaiters;
+                queuedRefreshWaiters = [];
+                setLoading(true);
+                poll().then(function () {
+                  waiters.forEach(function (resolve) {
+                    resolve();
+                  });
+                });
+              } else {
+                timer = window.setTimeout(poll, POLL_INTERVAL_MS);
+              }
             }
           }
         }
@@ -460,7 +498,12 @@ feature.statePolling = (function () {
             window.clearTimeout(timer);
             timer = null;
           }
-          if (inFlight) return Promise.resolve();
+          if (inFlight) {
+            refreshAfterCurrentPoll = true;
+            return new Promise(function (resolve) {
+              queuedRefreshWaiters.push(resolve);
+            });
+          }
           setLoading(true);
           return poll();
         };
@@ -474,6 +517,10 @@ feature.statePolling = (function () {
         return function () {
           cancelled = true;
           if (timer !== null) window.clearTimeout(timer);
+          refreshAfterCurrentPoll = false;
+          queuedRefreshWaiters.splice(0).forEach(function (resolve) {
+            resolve();
+          });
           if (refreshRef.current === refresh) refreshRef.current = null;
         };
       },
@@ -608,7 +655,7 @@ feature.tuningController = (function () {
       setStatus("saving");
       setError(null);
       try {
-        await feature.infrastructure.setExpressionGain(target, value);
+        await feature.infrastructure.setExpressionGain(target, value, response.state.revision);
         setStatus("saved");
         await refreshState();
       } catch (requestError) {
@@ -622,7 +669,7 @@ feature.tuningController = (function () {
       setStatus("saving");
       setError(null);
       try {
-        await feature.infrastructure.restoreExpressionGain(target);
+        await feature.infrastructure.restoreExpressionGain(target, response.state.revision);
         setStatus("saved");
         await refreshState();
       } catch (requestError) {
@@ -643,6 +690,131 @@ feature.tuningController = (function () {
   return { targetFor: targetFor, useTuningControls: useTuningControls };
 })();
 
+feature.manualStateController = (function () {
+  function targetFor(selection, response) {
+    if (selection.mode === "exact") {
+      return { profileId: selection.profileId, sessionId: selection.sessionId };
+    }
+    if (response && response.available && response.state) {
+      return { profileId: response.state.profileId, sessionId: response.state.sessionId };
+    }
+    return null;
+  }
+
+  function targetKey(target) {
+    return target ? target.profileId + "\u0000" + target.sessionId : "";
+  }
+
+  function errorKind(error) {
+    const status = Number(error && (error.statusCode || error.status));
+    const message = String(error && error.message ? error.message : "");
+    if (status === 409 || /\b409\b|changed; refresh and retry/i.test(message)) return "conflict";
+    if (status === 404 || /\b404\b|unavailable/i.test(message)) return "unavailable";
+    return "error";
+  }
+
+  function safeErrorMessage(kind) {
+    if (kind === "conflict") return "The session changed; refreshed values need review.";
+    if (kind === "unavailable") return "The selected session or participant is unavailable.";
+    return "Unable to save this value. Try again after refreshing the session.";
+  }
+
+  function replaceStatus(current, key, value) {
+    const next = Object.assign({}, current, { [key]: value });
+    const keys = Object.keys(next);
+    keys.slice(0, Math.max(0, keys.length - 64)).forEach(function (oldKey) {
+      delete next[oldKey];
+    });
+    return next;
+  }
+
+  function useManualStateControls(selection, response, refreshState) {
+    const target = targetFor(selection, response);
+    const currentKey = targetKey(target);
+    const statusPair = SDK.hooks.useState({});
+    const statusByField = statusPair[0];
+    const setStatusByField = statusPair[1];
+    const pendingPair = SDK.hooks.useState(false);
+    const pending = pendingPair[0];
+    const setPending = pendingPair[1];
+    const resetPair = SDK.hooks.useState(0);
+    const resetToken = resetPair[0];
+    const setResetToken = resetPair[1];
+    const requestGeneration = SDK.hooks.useRef(0);
+    const activeKey = SDK.hooks.useRef(currentKey);
+    activeKey.current = currentKey;
+
+    SDK.hooks.useEffect(
+      function () {
+        requestGeneration.current += 1;
+        setPending(false);
+      },
+      [currentKey]
+    );
+
+    function statusKey(scope, field, participantId) {
+      return [currentKey, scope, field, participantId || ""].join("\u0000");
+    }
+
+    function statusFor(scope, field, participantId) {
+      return statusByField[statusKey(scope, field, participantId)] || null;
+    }
+
+    async function apply(scope, field, value, participantId) {
+      if (!target || !response || !response.state || pending) return;
+      const key = statusKey(scope, field, participantId);
+      const generation = requestGeneration.current;
+      const payload = {
+        profile_id: target.profileId,
+        session_id: target.sessionId,
+        scope: scope,
+        field: field,
+        value: value,
+        expected_revision: response.state.revision,
+      };
+      if (scope === "relationship") payload.participant_id = participantId;
+      setPending(true);
+      setStatusByField(replaceStatus(statusByField, key, { status: "saving" }));
+      try {
+        await feature.infrastructure.applyManualState(payload);
+        if (generation !== requestGeneration.current || activeKey.current !== currentKey) return;
+        await refreshState();
+        if (generation !== requestGeneration.current || activeKey.current !== currentKey) return;
+        setStatusByField(replaceStatus(statusByField, key, { status: "saved" }));
+      } catch (error) {
+        if (generation !== requestGeneration.current || activeKey.current !== currentKey) return;
+        const kind = errorKind(error);
+        setStatusByField(
+          replaceStatus(statusByField, key, {
+            status: kind,
+            message: safeErrorMessage(kind),
+          })
+        );
+        if (kind === "conflict") {
+          await refreshState();
+          if (generation === requestGeneration.current && activeKey.current === currentKey) {
+            setResetToken(resetToken + 1);
+          }
+        }
+      } finally {
+        if (generation === requestGeneration.current && activeKey.current === currentKey) {
+          setPending(false);
+        }
+      }
+    }
+
+    return {
+      target: target,
+      pending: pending,
+      resetToken: resetToken,
+      statusFor: statusFor,
+      apply: apply,
+    };
+  }
+
+  return { targetFor: targetFor, useManualStateControls: useManualStateControls };
+})();
+
 feature.application = (function () {
   function useDashboardState(initialResponse) {
     const selectionPair = SDK.hooks.useState(feature.domain.latestSelection());
@@ -651,6 +823,11 @@ feature.application = (function () {
     const state = feature.statePolling.useSelectedState(initialResponse, selection);
     const catalog = feature.sessionCatalog.useSessionCatalog();
     const tuning = feature.tuningController.useTuningControls(
+      selection,
+      state.response,
+      state.refreshNow
+    );
+    const manual = feature.manualStateController.useManualStateControls(
       selection,
       state.response,
       state.refreshNow
@@ -678,10 +855,16 @@ feature.application = (function () {
       tuningConfiguration:
         state.response && state.response.state ? state.response.state.tuningConfiguration : null,
       tuningTarget: tuning.target,
+      controlsEnabled: Boolean(state.response && state.response.controlsEnabled),
       tuningStatus: tuning.status,
       tuningError: tuning.error,
       applyExpressionGain: tuning.applyExpressionGain,
       restoreExpressionGain: tuning.restoreExpressionGain,
+      manualTarget: manual.target,
+      manualPending: manual.pending,
+      manualResetToken: manual.resetToken,
+      manualStatusFor: manual.statusFor,
+      applyManualState: manual.apply,
       selectSession: selectSession,
       returnToLatest: returnToLatest,
       refreshSessions: catalog.refreshSessions,
@@ -981,7 +1164,9 @@ feature.presentationTuningControls = (function () {
       ]
     );
 
-    if (!configuration || !configuration.available || !model.tuningTarget) return null;
+    if (!model.controlsEnabled || !configuration || !configuration.available || !model.tuningTarget) {
+      return null;
+    }
 
     const value = parseDraft(draft);
     const saving = model.tuningStatus === "saving";
@@ -999,6 +1184,317 @@ feature.presentationTuningControls = (function () {
   }
 
   return { TuningControls: TuningControls };
+})();
+
+feature.presentationManualStateControls = (function () {
+  const e = SDK.React.createElement;
+  const AFFECT_FIELDS = [
+    ["valence", -1, 1],
+    ["arousal", 0, 1],
+    ["frustration", 0, 1],
+    ["offended", 0, 1],
+  ];
+  const RELATIONSHIP_FIELDS = [
+    ["trust", -1, 1],
+    ["affinity", -1, 1],
+    ["respect", -1, 1],
+    ["irritation", 0, 1],
+    ["unresolved_tension", 0, 1],
+  ];
+
+  function parseDraft(draft, minimum, maximum) {
+    if (draft.trim() === "") return null;
+    const number = Number(draft);
+    return Number.isFinite(number) && number >= minimum && number <= maximum ? number : null;
+  }
+
+  function controlIdentity(target, participantId) {
+    return [target.profileId, target.sessionId, participantId || ""].join("\u0000");
+  }
+
+  function availableParticipant(relationships, selectedId) {
+    const exists = relationships.some(function (item) {
+      return item.id === selectedId;
+    });
+    if (exists) return selectedId;
+    return relationships.length ? relationships[0].id : "";
+  }
+
+  function fieldLabel(field) {
+    return field === "unresolved_tension" ? "Unresolved tension" : feature.domain.label(field);
+  }
+
+  function fieldControl(props) {
+    const inputId = "ha-manual-" + props.scope + "-" + props.field + "-" + props.index;
+    const initial = String(props.value);
+    const draftPair = SDK.hooks.useState(initial);
+    const draft = draftPair[0];
+    const setDraft = draftPair[1];
+    const feedback = props.model.manualStatusFor(
+      props.scope,
+      props.field,
+      props.participantId
+    );
+    const parsed = parseDraft(draft, props.minimum, props.maximum);
+    const changed = parsed !== null && parsed !== props.value;
+    const saving = props.model.manualPending;
+
+    SDK.hooks.useEffect(
+      function () {
+        setDraft(String(props.value));
+      },
+      [props.identity, props.model.manualResetToken]
+    );
+
+    return e(
+      "div",
+      { className: "ha-manual-field", key: props.field },
+      e(
+        "div",
+        { className: "ha-manual-field__heading" },
+        e("label", { htmlFor: inputId + "-range" }, fieldLabel(props.field)),
+        e("span", { className: "ha-muted" }, "Current " + feature.domain.formatNumber(props.value))
+      ),
+      e(
+        "div",
+        { className: "ha-manual-field__inputs" },
+        e("input", {
+          id: inputId + "-range",
+          type: "range",
+          min: String(props.minimum),
+          max: String(props.maximum),
+          step: "0.01",
+          value: String(parsed === null ? props.value : parsed),
+          onChange: function (event) {
+            setDraft(event.target.value);
+          },
+          disabled: saving,
+          "aria-label": fieldLabel(props.field) + " slider",
+        }),
+        e(
+          "label",
+          { htmlFor: inputId + "-number", className: "ha-manual-field__number-label" },
+          e("span", null, "Value"),
+          e("input", {
+            id: inputId + "-number",
+            type: "number",
+            min: String(props.minimum),
+            max: String(props.maximum),
+            step: "0.01",
+            value: draft,
+            onChange: function (event) {
+              setDraft(event.target.value);
+            },
+            disabled: saving,
+            "aria-label": fieldLabel(props.field) + " numeric value",
+          })
+        )
+      ),
+      e(
+        "div",
+        { className: "ha-manual-field__actions" },
+        e(
+          "button",
+          {
+            type: "button",
+            className: "ha-control-button",
+            onClick: function () {
+              if (parsed !== null) {
+                return props.model.applyManualState(
+                  props.scope,
+                  props.field,
+                  parsed,
+                  props.participantId
+                );
+              }
+            },
+            disabled: saving || parsed === null || !changed,
+          },
+          feedback && feedback.status === "saving" ? "Saving…" : "Apply"
+        ),
+        parsed === null
+          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
+              "Enter a number from " + props.minimum + " to " + props.maximum + ".")
+          : null,
+        feedback && feedback.status === "saved"
+          ? e("span", { className: "ha-manual-feedback", role: "status" },
+              "Saved for this session.")
+          : null,
+        feedback && feedback.status === "conflict"
+          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
+              "This session changed. The latest values were refreshed; review and apply again.")
+          : null,
+        feedback && feedback.status === "unavailable"
+          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
+              "The selected session or participant is unavailable.")
+          : null,
+        feedback && feedback.status === "error"
+          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
+              feedback.message || "Unable to save this value.")
+          : null
+      )
+    );
+  }
+
+  function fieldGroup(title, scope, entries, model, identity, participantId) {
+    return e(
+      "section",
+      { className: "ha-manual-group", key: scope + (participantId || "") },
+      e("h3", null, title),
+      entries.map(function (entry, index) {
+        return e(fieldControl, {
+          key: scope + "-" + entry[0] + "-" + (participantId || ""),
+          index: scope + "-" + index + "-" + (participantId || "global"),
+          scope: scope,
+          field: entry[0],
+          minimum: entry[1],
+          maximum: entry[2],
+          value: entry[3],
+          participantId: participantId,
+          identity: identity,
+          model: model,
+        });
+      })
+    );
+  }
+
+  function targetHeader(target, state) {
+    return e(
+      "header",
+      { className: "ha-manual-controls__header" },
+      e(
+        "div",
+        null,
+        e("div", { className: "ha-kicker" }, "Manual state controls"),
+        e("h2", { id: "ha-manual-controls-title" }, "Adjust selected session"),
+        e(
+          "p",
+          { className: "ha-muted" },
+          "Each Apply updates one source value after passive decay and affects this session only."
+        ),
+        e(
+          "p",
+          { className: "ha-manual-controls__identity" },
+          "Profile ",
+          e("strong", null, target.profileId),
+          " · Session ",
+          e("strong", null, target.sessionId)
+        )
+      ),
+      e("span", { className: "ha-tuning-status" }, "Revision " + state.revision)
+    );
+  }
+
+  function RelationshipControls(props) {
+    const state = props.state;
+    const model = props.model;
+    const target = props.target;
+    const pair = SDK.hooks.useState(state.relationships.length ? state.relationships[0].id : "");
+    const selectedId = availableParticipant(state.relationships, pair[0]);
+    const setSelectedId = pair[1];
+    const relationshipKey = JSON.stringify(
+      state.relationships.map(function (item) {
+        return item.id;
+      })
+    );
+    const identity = controlIdentity(target, selectedId);
+    const relation = state.relationships.find(function (item) {
+      return item.id === selectedId;
+    });
+
+    SDK.hooks.useEffect(
+      function () {
+        setSelectedId(function (current) {
+          return availableParticipant(state.relationships, current);
+        });
+      },
+      [target.profileId, target.sessionId, relationshipKey]
+    );
+
+    if (!state.relationships.length) {
+      return e(
+        "section",
+        { className: "ha-manual-group" },
+        e("h3", null, "Existing participant relationship"),
+        e("p", { className: "ha-muted" }, "No participant relationships exist in this session yet.")
+      );
+    }
+    return e(
+      "section",
+      { className: "ha-manual-group" },
+      e("h3", null, "Existing participant relationship"),
+      e(
+        "label",
+        { className: "ha-manual-participant", htmlFor: "ha-manual-participant-select" },
+        e("span", null, "Participant ID"),
+        e(
+          "select",
+          {
+            id: "ha-manual-participant-select",
+            value: selectedId,
+            onChange: function (event) {
+              setSelectedId(event.target.value);
+            },
+          },
+          state.relationships.map(function (item) {
+            return e("option", { value: item.id, key: item.id }, item.id);
+          })
+        )
+      ),
+      e(
+        "p",
+        { className: "ha-manual-controls__identity" },
+        "Exact participant ",
+        e("strong", null, selectedId)
+      ),
+      relation
+        ? fieldGroup(
+            "Values for " + relation.id,
+            "relationship",
+            RELATIONSHIP_FIELDS.map(function (entry) {
+              return [
+                entry[0],
+                entry[1],
+                entry[2],
+                entry[0] === "unresolved_tension" ? relation.unresolvedTension : relation[entry[0]],
+              ];
+            }),
+            model,
+            identity,
+            selectedId
+          )
+        : null
+    );
+  }
+
+  function ManualStateControls(props) {
+    const model = props.model;
+    const state = props.state;
+    const target = model.manualTarget;
+    if (!model.controlsEnabled || !target || state.modelVersion !== 2) return null;
+    const identity = controlIdentity(target, "");
+    const affect = AFFECT_FIELDS.map(function (entry) {
+      return [entry[0], entry[1], entry[2], state.affect[entry[0]]];
+    });
+
+    return e(
+      "section",
+      { className: "ha-manual-controls", "aria-labelledby": "ha-manual-controls-title" },
+      targetHeader(target, state),
+      fieldGroup("Affect", "affect", affect, model, identity, null),
+      fieldGroup(
+        "Atmosphere",
+        "atmosphere",
+        [["atmosphere_tension", 0, 1, state.atmosphereSource]],
+        model,
+        identity,
+        null
+      ),
+      e(RelationshipControls, { state: state, model: model, target: target })
+    );
+  }
+
+  return { ManualStateControls: ManualStateControls };
 })();
 
 feature.presentationStateView = (function () {
@@ -1029,7 +1525,12 @@ feature.presentationStateView = (function () {
         { className: "ha-core__body" },
         e("span", { className: "ha-core__label" }, "Current mood"),
         e("strong", null, feature.domain.label(state.mood)),
-        e("span", { className: "ha-core__posture" }, feature.domain.label(state.posture))
+        e(
+          "span",
+          { className: "ha-core__posture" },
+          e("span", null, "Last response posture"),
+          e("strong", null, feature.domain.label(state.posture))
+        )
       )
     );
   }
@@ -1452,6 +1953,7 @@ feature.presentation = (function () {
   const stateView = feature.presentationStateView;
   const navigator = feature.presentationSessionNavigator;
   const tuning = feature.presentationTuningControls;
+  const manualControls = feature.presentationManualStateControls;
 
   function selectionPanel(model) {
     if (model.selectedStateLoading) {
@@ -1490,7 +1992,18 @@ feature.presentation = (function () {
           ? stateView.renderState(
               model.response.state,
               model.hasError,
-              e(tuning.TuningControls, { model: model, state: model.response.state })
+              e(
+                "div",
+                { className: "ha-state-editors" },
+                e(manualControls.ManualStateControls, {
+                  key: model.manualTarget
+                    ? model.manualTarget.profileId + "\u0000" + model.manualTarget.sessionId
+                    : "no-target",
+                  model: model,
+                  state: model.response.state,
+                }),
+                e(tuning.TuningControls, { model: model, state: model.response.state })
+              )
             )
           : selectionPanel(model);
       return e(

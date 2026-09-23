@@ -20,9 +20,10 @@ An optional authenticated affect dashboard is also implemented under
 [`dashboard/`](dashboard/README.md). It uses Hermes' dashboard extension
 surface, shares the existing dashboard port, and remains disabled unless
 `HERMES_AFFECT_DASHBOARD=1` is explicitly supplied to the dashboard process.
-Its only write control is a session-scoped `expression_gain` override with an
-explicit restore action; it does not modify SOUL configuration or other
-sessions.
+Writes separately require `HERMES_AFFECT_DASHBOARD_CONTROLS=1` and are limited
+to session-scoped `expression_gain` tuning and allowlisted affect, atmosphere,
+and existing-participant relationship source controls. They do not modify
+SOUL configuration or other sessions.
 
 The plugin is intentionally developed against Hermes' documented public
 general-plugin API rather than a single pinned runtime image. Newest Hermes

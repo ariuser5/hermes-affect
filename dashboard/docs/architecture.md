@@ -2,16 +2,16 @@
 
 ## Objective
 
-Provide a clear view of the latest affect state, with one narrow
-session-scoped tuning control, without creating a second state model, web
-server, authentication system, or Docker exposure.
+Provide a clear view of the latest affect state and optional, session-scoped
+manual controls without creating a second state model, web server,
+authentication system, or Docker exposure.
 
 ## Runtime flow
 
 ```text
 Hermes dashboard browser tab
         |
-        | authenticated state reads and session tuning writes
+        | authenticated reads and explicitly gated exact-session writes
         v
 dashboard/plugin_api.py
         |
@@ -37,9 +37,9 @@ The backend mirrors the main plugin:
   FastAPI imports.
 - `application/` chooses the latest or exact state, assembles the response
   using the shared safe projection, produces bounded session catalog pages, and
-  delegates tuning validation/mutation to the shared plugin service.
-- `infrastructure/` reads the file-backed state store and translates storage
-  failures at the boundary.
+  validates session tuning and manual source-value mutations.
+- `infrastructure/` reads the file-backed state store and provides
+  lock-protected exact-state mutation with revision checks and atomic writes.
 - `plugin_api.py` is the thin Hermes/FastAPI adapter.
 
 The browser source uses equivalent boundaries:
@@ -72,21 +72,34 @@ GET /api/plugins/hermes-affect/state?profile_id=<id>&session_id=<id>
 GET /api/plugins/hermes-affect/sessions?limit=50&offset=0
 ```
 
-The only mutation endpoints are the authenticated, exact-session controls:
+The existing session-tuning endpoints and the manual source-value endpoint are
+registered only when both `HERMES_AFFECT_DASHBOARD` and
+`HERMES_AFFECT_DASHBOARD_CONTROLS` are explicitly enabled:
 
 ```text
-POST /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>&expression_gain=<0..10>
-DELETE /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>
+POST /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>&expression_gain=<0..10>&expected_revision=<n>
+DELETE /api/plugins/hermes-affect/tuning?profile_id=<id>&session_id=<id>&expected_revision=<n>
+POST /api/plugins/hermes-affect/controls
 ```
 
-They apply or remove only the v2 `expression_gain` override in that session.
-The command and dashboard use the same validation and mutation service.
+The tuning endpoints apply or remove only the v2 `expression_gain` override.
+The JSON controls request edits one allowed v2 source field: affect valence,
+arousal, frustration, or offended; atmosphere tension; or trust, affinity,
+respect, irritation, or unresolved tension for an existing participant. The
+manual editor applies elapsed decay and the requested value under one lock,
+then refreshes only derived mood/conflict projections. Classification and
+provider calls remain outside the lock; the final event transition re-reads the
+latest state under lock before applying decay and events. Lifecycle timestamp
+updates likewise mutate the latest locked state. The administrative command
+and dashboard tuning endpoints share the same `SessionTuningService` for
+expression-gain validation and mutation.
 
 The response wraps the same projection as `/affect state`:
 
 ```json
 {
   "available": true,
+  "controls_enabled": true,
   "state": {
     "profile_id": "bot-id",
     "session_id": "session-id"
@@ -95,7 +108,9 @@ The response wraps the same projection as `/affect state`:
 ```
 
 When no valid state exists, the endpoint returns
-`{"available": false, "state": null}` with HTTP 200. A present state includes:
+`{"available": false, "state": null, "controls_enabled": false}` with HTTP
+200 (the capability is true when controls are enabled). A present state
+includes:
 
 - profile and session identity;
 - revision and update timestamp;
@@ -104,6 +119,11 @@ When no valid state exists, the endpoint returns
 - valence, arousal, frustration, and offended values;
 - current relationships, active sensitivities, open conflicts, and tuning
   overrides.
+
+Every mutation requires the selected exact identity and expected revision.
+Stale revisions return a bounded conflict response; invalid values return
+`422`, and unavailable sessions or participants return `404`. This prevents a
+dashboard poll or an older form from overwriting newer session state.
 
 The catalog route returns only profile/session IDs and bounded update, revision,
 mood, posture, and model-version summaries. Exact selection requires both IDs;
@@ -130,4 +150,6 @@ bounded, transcript-free history projection.
 - Malformed or unsupported state files are skipped while selecting the latest
   valid state; if none remain, the page receives the normal empty response.
 - Stale state: page remains readable and labels the update age.
+- Controls disabled: the read-only page remains available and all editing
+  controls are hidden; a manual edit conflict triggers refresh and draft reset.
 - Frontend or plugin failure: Hermes' other dashboard pages remain functional.

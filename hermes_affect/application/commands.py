@@ -48,14 +48,30 @@ class AffectCommandHandler:
                 config, soul_hash = self.runtime._load_config(kwargs)
                 if config.schema_version != 2:
                     return "Migrate SOUL to schema_version 2 before resetting this legacy session."
-            state = AffectState.initial(
-                state.profile_id,
-                state.session_id,
-                soul_sha256=soul_hash,
-                predisposition=config.to_dict(),
-            )
-            state.revision += 1
-            self.runtime.store.save(state)
+
+            def reset(latest: AffectState) -> bool:
+                current_config = self.runtime._config_for_state(latest)
+                current_hash = latest.soul_sha256
+                if current_config is None:
+                    current_config = config
+                    current_hash = soul_hash
+                replacement = AffectState.initial(
+                    latest.profile_id,
+                    latest.session_id,
+                    soul_sha256=current_hash,
+                    predisposition=current_config.to_dict(),
+                )
+                replacement.revision = latest.revision + 1
+                latest.__dict__.clear()
+                latest.__dict__.update(replacement.__dict__)
+                return True
+
+            try:
+                self.runtime.store.mutate_exact(state.profile_id, state.session_id, reset)
+            except ValueError as error:
+                return str(error)
+            except LookupError:
+                return "Selected affect session is unavailable."
             return "Affective state reset for this session."
         if self.runtime._config_for_state(state) is None:
             return "Legacy affect session requires migration/reset; state was preserved."
@@ -97,12 +113,26 @@ class AffectCommandHandler:
             if len(parts) != 3:
                 return "Usage: /affect tune expression_gain <0..10>"
             name = parts[1]
+
+            def update(latest: AffectState) -> bool:
+                if self.runtime._config_for_state(latest) is None:
+                    raise ValueError(
+                        "Legacy affect session requires migration/reset; state was preserved."
+                    )
+                self.tuning.set_override(latest, name, parts[2])
+                return True
+
             try:
-                value = self.tuning.set_override(state, name, parts[2])
+                updated, _changed = self.runtime.store.mutate_exact(
+                    state.profile_id,
+                    state.session_id,
+                    update,
+                )
             except ValueError as error:
                 return str(error)
-            self.runtime.store.save(state)
-            return f"Session tuning override set: {name}={value:g}."
+            except LookupError:
+                return "Selected affect session is unavailable."
+            return f"Session tuning override set: {name}={updated.tuning_overrides[name]:g}."
         return "Usage: /affect state [profile] | status|explain|reset|calm|heat|tune"
 
     def _state_debug(self, profile_id: str, kwargs: dict[str, Any]) -> str:

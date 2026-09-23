@@ -12,6 +12,12 @@ The opt-in environment setting is:
 HERMES_AFFECT_DASHBOARD: "${HERMES_AFFECT_DASHBOARD:-0}"
 ```
 
+Manual and tuning writes require a separate, explicit opt-in:
+
+```yaml
+HERMES_AFFECT_DASHBOARD_CONTROLS: "${HERMES_AFFECT_DASHBOARD_CONTROLS:-0}"
+```
+
 The complete enablement conditions are:
 
 1. `hermes-affect` is installed and enabled.
@@ -19,9 +25,17 @@ The complete enablement conditions are:
 3. `HERMES_AFFECT_DASHBOARD=1` is set explicitly.
 4. The existing dashboard authentication provider is configured successfully.
 
-The feature reads and, for the narrow authenticated tuning controls, writes
-the same `HERMES_AFFECT_STATE_DIR` as the main plugin. It must not modify SOUL
-configuration or any session other than the selected exact session.
+The controls flag defaults to off. State/catalog reads remain available when
+the dashboard is enabled but controls are off. To expose mutations, both flags
+must be explicitly enabled. Mutations remain restricted to one exact selected
+session and the documented expression-gain and manual source-value allowlists.
+
+The feature reads and, when controls are enabled, writes the same
+`HERMES_AFFECT_STATE_DIR` as the main plugin. It must not modify SOUL
+configuration or any session other than the selected exact session. Manual
+edits apply elapsed passive decay once, then the selected source value, while
+holding the per-state file lock; model classification and provider requests are
+not made under that lock.
 
 ## Source and artifact installation
 
@@ -55,9 +69,12 @@ unchanged.
 4. Smoke-test it enabled on loopback or an isolated test instance.
 5. Confirm unauthenticated requests are rejected by Hermes.
 6. Confirm the existing dashboard port is the only published web port.
-7. Confirm only the exact-session `expression_gain` apply/restore routes can
-   mutate state and that no excluded fields are exposed.
-8. Confirm the retained-session catalog is bounded and exact selection cannot
+7. Confirm that controls-off registers no mutation routes, while controls-on
+   permits only exact-session expression-gain and allowlisted manual edits.
+8. Confirm manual writes reject stale revisions, booleans, strings, non-finite
+   and out-of-range values, unknown participants, legacy states, and malformed
+   or colliding exact identities.
+9. Confirm the retained-session catalog is bounded and exact selection cannot
    cross a sanitized profile/session path collision.
 9. Only after explicit authorization, propose and validate the infrastructure
    repository setting on the real deployment.

@@ -19,7 +19,11 @@ from ..domain.relationships import observe_exchange
 from ..domain.state import AffectState, utc_now
 from ..infrastructure.configuration.soul_loader import parse_soul_affect
 from ..infrastructure.hermes.semantic_provider import SemanticClassifier
-from ..infrastructure.persistence.json_store import DEFAULT_ABANDONED_STATE_DAYS, StateStore
+from ..infrastructure.persistence.json_store import (
+    DEFAULT_ABANDONED_STATE_DAYS,
+    ExactStateUnavailable,
+    StateStore,
+)
 from .classification.deterministic.classifier import EventClassifier
 from .classification.semantic.classifier import (
     SemanticClassifierConfig,
@@ -185,29 +189,26 @@ class AffectRuntime:
             return None
         turn_id = kwargs.get("turn_id")
         if turn_id and state.last_turn_id == str(turn_id):
-            return None if self.shadow_mode else self._context(state, config)
-
-        try:
-            elapsed_hours = max(
-                0.0,
-                (self._now() - datetime.fromisoformat(state.updated_at)).total_seconds() / 3600.0,
-            )
-        except (TypeError, ValueError):
-            elapsed_hours = 0.0
-        decay_state(state, config, elapsed_hours)
+            try:
+                state, _changed = self.store.mutate_exact(
+                    state.profile_id,
+                    state.session_id,
+                    lambda _latest: False,
+                )
+            except ExactStateUnavailable:
+                return None
+            config = self._config_for_state(state)
+            if config is None or self.shadow_mode:
+                return None
+            return self._context(state, config)
 
         message = str(kwargs.get("user_message") or "")
         speaker_id = str(kwargs.get("sender_id") or "user:unknown")
         speaker_id = speaker_id[:200]
-        state.current_participant = speaker_id
-        state.active_sensitivities = []
         speaker_kind = str(kwargs.get("sender_kind") or "unknown").casefold()
         verified_user = (
             bool(kwargs.get("verified_user", False)) and speaker_kind.casefold() != "bot"
         )
-        audit_entries: list[
-            tuple[Any, str, dict[str, dict[str, float]], dict[str, dict[str, float]]]
-        ] = []
         deterministic_events = self.classifier.classify(
             message,
             speaker_id=speaker_id,
@@ -241,19 +242,102 @@ class AffectRuntime:
                 known_participants=self._known_participants(kwargs),
             )
 
+        profile_id = self._profile_id(kwargs)
+        session_id = str(kwargs["session_id"])
         identities = self._bot_identities(kwargs)
-        participants = list(dict.fromkeys(self._known_participants(kwargs) + identities))
+        known_participants = self._known_participants(kwargs)
+
+        def apply_latest(latest: AffectState) -> bool:
+            if turn_id and latest.last_turn_id == str(turn_id):
+                return False
+            current_config = self._config_for_state(latest)
+            if current_config is None:
+                return False
+            self._apply_classified_turn(
+                latest,
+                current_config,
+                events,
+                message=message,
+                speaker_id=speaker_id,
+                turn_id=turn_id,
+                identities=identities,
+                known_participants=known_participants,
+                kwargs=kwargs,
+            )
+            return True
+
+        try:
+            state, _changed = self.store.mutate_exact(profile_id, session_id, apply_latest)
+        except ExactStateUnavailable:
+            return None
+        config = self._config_for_state(state)
+        if config is None:
+            return None
+        if self.shadow_mode:
+            logger.info("shadow_mode active; affect context injection suppressed")
+            return None
+        return self._context(state, config)
+
+    def post_llm_call(self, **kwargs: Any) -> None:
+        self._update_lifecycle_timestamp(kwargs)
+
+    def on_session_end(self, **kwargs: Any) -> None:
+        self._update_lifecycle_timestamp(kwargs)
+
+    def _update_lifecycle_timestamp(self, kwargs: dict[str, Any]) -> None:
+        state = self._state(kwargs)
+        if state is None or self._config_for_state(state) is None:
+            return
+
+        def update(latest: AffectState) -> bool:
+            if self._config_for_state(latest) is None:
+                return False
+            latest.updated_at = self._now().isoformat()
+            return True
+
+        try:
+            self.store.mutate_exact(
+                state.profile_id,
+                state.session_id,
+                update,
+            )
+        except ExactStateUnavailable:
+            return
+
+    def _apply_classified_turn(
+        self,
+        state: AffectState,
+        config: AffectConfig,
+        events: list[Any],
+        *,
+        message: str,
+        speaker_id: str,
+        turn_id: Any,
+        identities: list[str],
+        known_participants: list[str],
+        kwargs: dict[str, Any],
+    ) -> None:
+        try:
+            updated = datetime.fromisoformat(state.updated_at)
+            if updated.tzinfo is None:
+                updated = updated.replace(tzinfo=timezone.utc)
+            elapsed_hours = max(0.0, (self._now() - updated).total_seconds() / 3600.0)
+        except (TypeError, ValueError):
+            elapsed_hours = 0.0
+        decay_state(state, config, elapsed_hours)
+        participants = list(dict.fromkeys(known_participants + identities))
         events = route_events(
             events,
             message,
             bot_ids=identities,
             participants=participants,
             explicit_target=str(kwargs.get("target_id") or kwargs.get("recipient_id") or ""),
-            is_group=bool(kwargs.get("is_group", False))
-            or len(self._known_participants(kwargs)) > 1,
+            is_group=bool(kwargs.get("is_group", False)) or len(known_participants) > 1,
             config=config,
         )
-
+        state.current_participant = speaker_id
+        state.active_sensitivities = []
+        audit_entries = []
         last_event = None
         for event in events:
             last_event = event
@@ -301,23 +385,6 @@ class AffectRuntime:
         state.updated_at = self._now().isoformat()
         state.revision += 1
         state.last_turn_id = str(turn_id) if turn_id else state.last_turn_id
-        self.store.save(state)
-        if self.shadow_mode:
-            logger.info("shadow_mode active; affect context injection suppressed")
-            return None
-        return self._context(state, config)
-
-    def post_llm_call(self, **kwargs: Any) -> None:
-        state = self._state(kwargs)
-        if state is not None and self._config_for_state(state) is not None:
-            state.updated_at = self._now().isoformat()
-            self.store.save(state)
-
-    def on_session_end(self, **kwargs: Any) -> None:
-        state = self._state(kwargs)
-        if state is not None and self._config_for_state(state) is not None:
-            state.updated_at = self._now().isoformat()
-            self.store.save(state)
 
     def on_session_reset(self, **kwargs: Any) -> None:
         replacement_session_id = kwargs.get("new_session_id") or kwargs.get(

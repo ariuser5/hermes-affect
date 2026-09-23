@@ -6,7 +6,7 @@ criterion is completed.
 
 ## Current checkpoint
 
-Checkpoint date: 2026-09-21.
+Checkpoint date: 2026-09-22.
 
 - [x] Create an isolated dashboard feature directory.
 - [x] Record the native Hermes dashboard-extension architecture.
@@ -34,6 +34,11 @@ Checkpoint date: 2026-09-21.
 - [x] Complete the local implementation of Phases 3–5: controller selection
       state, responsive native session selector, generated assets, tests, and
       documentation.
+- [x] Complete the separately planned manual source-value controls behind
+      `HERMES_AFFECT_DASHBOARD_CONTROLS`; focused/full tests, lint, syntax, and
+      generated-asset checks pass. Live Hermes and packaged-image checks remain
+      pending. See
+      [`SESSION_STATE_CONTROLS_PLAN.md`](SESSION_STATE_CONTROLS_PLAN.md).
 - [ ] Complete live Hermes visual and packaged-extension smoke checks.
 
 The retained-session navigation implementation is complete locally, but live
@@ -41,17 +46,20 @@ Hermes visual and packaged-extension checks remain. No Docker configuration,
 deployed Hermes
 configuration, or Raspberry Pi state was changed at this checkpoint. The
 checked-in extension remains inaccessible unless it is installed in Hermes and
-`HERMES_AFFECT_DASHBOARD` is explicitly enabled in the dashboard process.
+`HERMES_AFFECT_DASHBOARD` is explicitly enabled. State-changing controls also
+require `HERMES_AFFECT_DASHBOARD_CONTROLS=1`; reads remain available without it.
 
 ## Decisions already made
 
 1. Use Hermes' native dashboard plugin surface: a manifest, a pre-built browser
    bundle, and a FastAPI router mounted by Hermes.
 2. Do not start a plugin-owned web server and do not publish a new Docker port.
-3. Require both Hermes' dashboard and `HERMES_AFFECT_DASHBOARD=1`. The affect
-   flag defaults to disabled.
-4. Keep dashboard writes narrow: only the selected session's supported
-   `expression_gain` override may be applied or restored.
+3. Require `HERMES_AFFECT_DASHBOARD=1` for reads; that flag defaults off.
+   Require the separate default-off `HERMES_AFFECT_DASHBOARD_CONTROLS=1` for
+   every mutation.
+4. Limit writes to the selected exact session: expression-gain tuning and the
+   allowlisted affect, atmosphere, and existing-participant relationship
+   source values in `SESSION_STATE_CONTROLS_PLAN.md`.
 5. Reuse one shared safe-state projection for `/affect state` and the HTTP API.
 6. Show the latest state available in the current container first. Do not
    weaken separate-container state isolation to build an all-bot view.
@@ -94,6 +102,7 @@ dashboard/
 │   │   │   ├── state_polling.js
 │   │   │   ├── session_catalog.js
 │   │   │   ├── tuning_controller.js
+│   │   │   ├── manual_state_controller.js
 │   │   │   └── state_controller.js
 │   │   ├── domain/                       # scales, labels, state validation
 │   │   ├── infrastructure/               # authenticated API client
@@ -102,6 +111,7 @@ dashboard/
 │   │   │   ├── state_view.js
 │   │   │   ├── session_navigator.js
 │   │   │   ├── tuning_controls.js
+│   │   │   ├── manual_state_controls.js
 │   │   │   └── page.js
 │   │   └── index.js                      # registration boundary
 │   └── README.md
@@ -220,10 +230,10 @@ Acceptance criteria:
 - Cross-container aggregation for several bot instances.
 - Historical charts and long-term affect trends.
 - WebSocket or server-sent-event updates.
-- Mutating controls such as calm, heat, reset, raw affect values, traits,
-  relationships, sensitivities, or conflicts.
-- Dashboard tuning controls for fields other than the supported v2
-  `expression_gain` override.
+- Moderation/reset/migration controls, participant creation, temperament traits,
+  sensitivities, and independent conflict-projection editing.
+- Controls beyond expression gain and the narrow manual source allowlist in
+  [`SESSION_STATE_CONTROLS_PLAN.md`](SESSION_STATE_CONTROLS_PLAN.md).
 - Public or unauthenticated temperament summaries.
 
 Each item requires its own privacy, authorization, and deployment review.

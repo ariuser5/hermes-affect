@@ -59,6 +59,7 @@ feature.domain = (function () {
       irritation: finite(relation.irritation, 0, 1, 0),
       respect: finite(relation.respect, -1, 1, 0),
       tension: finite(relation.unresolved_tension, 0, 1, 0),
+      unresolvedTension: finite(relation.unresolved_tension, 0, 1, 0),
     };
   }
 
@@ -79,13 +80,14 @@ feature.domain = (function () {
       typeof response.state !== "object" ||
       Array.isArray(response.state)
     ) {
-      return { available: false, state: null };
+      return { available: false, state: null, controlsEnabled: response.controls_enabled === true };
     }
 
     const state = objectOrEmpty(response.state);
     const affect = objectOrEmpty(state.affect);
     return {
       available: true,
+      controlsEnabled: response.controls_enabled === true,
       state: {
         profileId: text(state.profile_id, "unknown"),
         sessionId: text(state.session_id, "unknown"),
@@ -100,6 +102,7 @@ feature.domain = (function () {
             ? null
             : finite(state.expression_drive, 0, 1, 0),
         atmosphere: finite(state.perceived_atmosphere_tension, 0, 1, 0),
+        atmosphereSource: finite(state.perceived_atmosphere_tension, 0, 1, 0),
         affect: {
           valence: finite(affect.valence, -1, 1, 0),
           arousal: finite(affect.arousal, 0, 1, 0),

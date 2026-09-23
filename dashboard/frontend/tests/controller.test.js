@@ -29,6 +29,26 @@ assert.equal(feature.statePolling.shouldPollImmediately(latest, false), false);
 assert.equal(feature.statePolling.shouldPollImmediately(latest, true), true);
 assert.equal(feature.statePolling.shouldPollImmediately(exactOne, false), true);
 
+const newerState = feature.statePolling.acceptStateSuccess(
+  {
+    response: feature.domain.normalizeResponse({
+      available: true,
+      state: { profile_id: "bot:one", session_id: "session:one", revision: 5 },
+    }),
+    responseSelection: exactOne,
+    selectedStateError: null,
+    errorSelection: null,
+    hasError: false,
+  },
+  { generation: 1, selection: exactOne },
+  { generation: 1, selection: exactOne },
+  {
+    available: true,
+    state: { profile_id: "bot:one", session_id: "session:one", revision: 4 },
+  },
+);
+assert.equal(newerState.response.state.revision, 5);
+
 const availablePreflight = {
   response: feature.domain.normalizeResponse(rawState("bot:latest", "session:latest")),
   responseSelection: latest,
