@@ -95,10 +95,12 @@ function DashboardControls(props) {
     manualPending: manual.pending,
     manualResetToken:
       props.manualResetToken === undefined ? manual.resetToken : props.manualResetToken,
-    manualStatusFor: manual.statusFor,
+    manualStatusFor: props.statusFor || manual.statusFor,
     applyManualState: manual.apply,
   };
   return SDK.React.createElement(feature.presentationManualStateControls.ManualStateControls, {
+    key: props.group || "affect",
+    group: props.group || "affect",
     model: model,
     state: props.state,
   });
@@ -128,11 +130,16 @@ function renderNode(value, pathName) {
   });
 }
 
-function manualTree(currentState, manualResetToken) {
+function manualTree(currentState, manualResetToken, group, statusFor) {
   return renderNode(
     {
       type: DashboardControls,
-      props: { state: currentState, manualResetToken: manualResetToken },
+      props: {
+        state: currentState,
+        manualResetToken: manualResetToken,
+        group: group || "affect",
+        statusFor: statusFor,
+      },
     },
     "root"
   );
@@ -161,7 +168,7 @@ function participantSelect(tree) {
 
 async function testApplyUsesTheDashboardModelAndExactTarget() {
   componentSlots.clear();
-  let tree = manualTree(state);
+  let tree = manualTree(state, undefined, "affect");
   let all = elements(tree);
   const inputs = all.filter(function (item) {
     return item.type === "input";
@@ -169,13 +176,12 @@ async function testApplyUsesTheDashboardModelAndExactTarget() {
   let buttons = all.filter(function (item) {
     return item.type === "button";
   });
-  assert.equal(inputs.length, 20);
-  assert.equal(buttons.length, 10);
-  assert.equal(all.some((item) => item.children.includes("user:complete-identifier")), true);
-  assert.equal(all.some((item) => item.children.includes("Manual state controls")), true);
+  assert.equal(inputs.length, 8);
+  assert.equal(buttons.length, 4);
+  assert.equal(all.some((item) => item.children.includes("Affect")), true);
+  assert.equal(all.some((item) => item.children.includes("user:complete-identifier")), false);
   assert.equal(all.some((item) => item.children.includes("Calm")), false);
   assert.equal(all.some((item) => item.children.includes("Reset")), false);
-  assert.equal(all.some((item) => item.children.includes("Revision 14")), true);
   assert.equal(applied.length, 0);
 
   const valenceInput = all.find(isValenceNumber);
@@ -211,7 +217,9 @@ async function testApplyUsesTheDashboardModelAndExactTarget() {
     expected_revision: 14,
   });
 
-  const trustInput = elements(tree).find(function (item) {
+  tree = manualTree(resetState, 1, "relationship");
+  const relationshipElements = elements(tree);
+  const trustInput = relationshipElements.find(function (item) {
     return (
       item.type === "input" &&
       item.props.id.includes("manual-relationship-trust-") &&
@@ -219,11 +227,11 @@ async function testApplyUsesTheDashboardModelAndExactTarget() {
     );
   });
   trustInput.props.onChange({ target: { value: "0.8" } });
-  tree = manualTree(resetState, 1);
+  tree = manualTree(resetState, 1, "relationship");
   buttons = elements(tree).filter(function (item) {
     return item.type === "button";
   });
-  await buttons[5].props.onClick();
+  await buttons[0].props.onClick();
   assert.equal(applied.length, 2, "each Apply submits one source field");
   assert.deepEqual(JSON.parse(JSON.stringify(applied[1])), {
     profile_id: "profile:latest",
@@ -254,7 +262,7 @@ function testRelationshipSelectionTracksAvailableParticipants() {
   const participantB = relationship("user:b");
   const participantC = relationship("user:c");
   let relationshipState = Object.assign({}, state, { relationships: [] });
-  let tree = manualTree(relationshipState);
+  let tree = manualTree(relationshipState, undefined, "relationship");
   assert.equal(
     participantSelect(tree),
     undefined,
@@ -262,33 +270,33 @@ function testRelationshipSelectionTracksAvailableParticipants() {
   );
 
   relationshipState = Object.assign({}, relationshipState, { relationships: [participantA] });
-  tree = manualTree(relationshipState);
+  tree = manualTree(relationshipState, undefined, "relationship");
   assert.equal(participantSelect(tree).props.value, "user:a", "the first new participant is selected");
 
   relationshipState = Object.assign({}, relationshipState, { relationships: [participantA, participantB] });
-  tree = manualTree(relationshipState);
+  tree = manualTree(relationshipState, undefined, "relationship");
   assert.equal(
     participantSelect(tree).props.value,
     "user:a",
     "adding a participant preserves selection"
   );
   participantSelect(tree).props.onChange({ target: { value: "user:b" } });
-  tree = manualTree(Object.assign({}, relationshipState, { revision: 15 }));
+  tree = manualTree(Object.assign({}, relationshipState, { revision: 15 }), undefined, "relationship");
   assert.equal(participantSelect(tree).props.value, "user:b", "polling retains a valid user selection");
 
   relationshipState = Object.assign({}, relationshipState, {
     relationships: [participantA, participantB, participantC],
   });
-  tree = manualTree(relationshipState);
+  tree = manualTree(relationshipState, undefined, "relationship");
   assert.equal(
     participantSelect(tree).props.value,
     "user:b",
     "adding another participant retains selection"
   );
   relationshipState = Object.assign({}, relationshipState, { relationships: [participantA, participantC] });
-  tree = manualTree(relationshipState);
+  tree = manualTree(relationshipState, undefined, "relationship");
   assert.equal(participantSelect(tree).props.value, "user:a", "removing the selection falls back to the first");
-  tree = manualTree(relationshipState);
+  tree = manualTree(relationshipState, undefined, "relationship");
   assert.equal(participantSelect(tree).props.value, "user:a", "the fallback remains selected on later polls");
 }
 

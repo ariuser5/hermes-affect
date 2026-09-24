@@ -629,8 +629,20 @@ feature.tuningController = (function () {
     return null;
   }
 
-  function errorMessage(error) {
-    return error && error.message ? String(error.message) : "Unable to update session tuning.";
+  function errorKind(error) {
+    const status = Number(error && (error.statusCode || error.status));
+    const message = String(error && error.message ? error.message : "");
+    if (status === 409 || /\b409\b|revision conflict|\bconflict\b|changed; refresh and retry/i.test(message)) {
+      return "conflict";
+    }
+    if (status === 404 || /\b404\b|unavailable/i.test(message)) return "unavailable";
+    return "error";
+  }
+
+  function errorMessage(kind) {
+    if (kind === "conflict") return "Revision conflict. Latest values loaded; review and apply again.";
+    if (kind === "unavailable") return "The selected session is unavailable.";
+    return "Unable to update session tuning. Try again after refreshing.";
   }
 
   function useTuningControls(selection, response, refreshState) {
@@ -640,48 +652,81 @@ feature.tuningController = (function () {
     const errorPair = SDK.hooks.useState(null);
     const error = errorPair[0];
     const setError = errorPair[1];
+    const resetPair = SDK.hooks.useState(0);
+    const resetToken = resetPair[0];
+    const setResetToken = resetPair[1];
     const target = targetFor(selection, response);
+    const targetKey = target ? target.profileId + "\u0000" + target.sessionId : "";
+    const requestGeneration = SDK.hooks.useRef(0);
+    const activeTarget = SDK.hooks.useRef(targetKey);
+    activeTarget.current = targetKey;
 
     SDK.hooks.useEffect(
       function () {
+        requestGeneration.current += 1;
         setStatus(null);
         setError(null);
+        setResetToken(function (current) {
+          return current + 1;
+        });
       },
-      [selection.mode, selection.profileId, selection.sessionId]
+      [targetKey]
     );
 
-    async function applyExpressionGain(value) {
-      if (!target) return;
+    function requestIsCurrent(generation, key) {
+      return generation === requestGeneration.current && activeTarget.current === key;
+    }
+
+    async function save(request, resetDraftAfterSuccess) {
+      if (!target || !response || !response.state || status === "saving") return;
+      const generation = requestGeneration.current;
+      const key = targetKey;
       setStatus("saving");
       setError(null);
       try {
-        await feature.infrastructure.setExpressionGain(target, value, response.state.revision);
-        setStatus("saved");
+        await request(target, response.state.revision);
+        if (!requestIsCurrent(generation, key)) return;
         await refreshState();
+        if (!requestIsCurrent(generation, key)) return;
+        if (resetDraftAfterSuccess) {
+          setResetToken(function (current) {
+            return current + 1;
+          });
+        }
+        setStatus("saved");
       } catch (requestError) {
-        setStatus("error");
-        setError(errorMessage(requestError));
+        if (!requestIsCurrent(generation, key)) return;
+        const kind = errorKind(requestError);
+        setStatus(kind);
+        setError(errorMessage(kind));
+        if (kind === "conflict") {
+          await refreshState();
+          if (requestIsCurrent(generation, key)) {
+            setResetToken(function (current) {
+              return current + 1;
+            });
+          }
+        }
       }
     }
 
-    async function restoreExpressionGain() {
-      if (!target) return;
-      setStatus("saving");
-      setError(null);
-      try {
-        await feature.infrastructure.restoreExpressionGain(target, response.state.revision);
-        setStatus("saved");
-        await refreshState();
-      } catch (requestError) {
-        setStatus("error");
-        setError(errorMessage(requestError));
-      }
+    function applyExpressionGain(value) {
+      return save(function (currentTarget, revision) {
+        return feature.infrastructure.setExpressionGain(currentTarget, value, revision);
+      });
+    }
+
+    function restoreExpressionGain() {
+      return save(function (currentTarget, revision) {
+        return feature.infrastructure.restoreExpressionGain(currentTarget, revision);
+      }, true);
     }
 
     return {
       target: target,
       status: status,
       error: error,
+      resetToken: resetToken,
       applyExpressionGain: applyExpressionGain,
       restoreExpressionGain: restoreExpressionGain,
     };
@@ -858,6 +903,7 @@ feature.application = (function () {
       controlsEnabled: Boolean(state.response && state.response.controlsEnabled),
       tuningStatus: tuning.status,
       tuningError: tuning.error,
+      tuningResetToken: tuning.resetToken,
       applyExpressionGain: tuning.applyExpressionGain,
       restoreExpressionGain: tuning.restoreExpressionGain,
       manualTarget: manual.target,
@@ -890,28 +936,10 @@ feature.application = (function () {
 
 feature.presentationPrimitives = (function () {
   const e = SDK.React.createElement;
-  const Card = SDK.components.Card;
-  const CardContent = SDK.components.CardContent;
-  const CardHeader = SDK.components.CardHeader;
-  const CardTitle = SDK.components.CardTitle;
   const Badge = SDK.components.Badge;
 
   function statusBadge(text, tone) {
     return e(Badge, { className: "ha-badge ha-badge--" + tone }, text);
-  }
-
-  function sectionCard(title, eyebrow, content, className) {
-    return e(
-      Card,
-      { className: "ha-card " + (className || "") },
-      e(
-        CardHeader,
-        { className: "ha-card__header" },
-        eyebrow ? e("div", { className: "ha-eyebrow" }, eyebrow) : null,
-        e(CardTitle, { className: "ha-card__title" }, title)
-      ),
-      e(CardContent, { className: "ha-card__content" }, content)
-    );
   }
 
   function metric(label, value, minimum, maximum, tone) {
@@ -958,7 +986,6 @@ feature.presentationPrimitives = (function () {
     return e(
       "div",
       { className: "ha-empty" },
-      e("div", { className: "ha-empty__icon", "aria-hidden": "true" }, "◇"),
       e("h2", null, "No affect state yet"),
       e(
         "p",
@@ -979,12 +1006,90 @@ feature.presentationPrimitives = (function () {
 
   return {
     statusBadge: statusBadge,
-    sectionCard: sectionCard,
     metric: metric,
     chips: chips,
     emptyState: emptyState,
     updatedLabel: updatedLabel,
   };
+})();
+
+feature.presentationStateSummary = (function () {
+  const e = SDK.React.createElement;
+
+  function meter(state, name, minimum, maximum, tone) {
+    const value = state ? state.affect[name] : null;
+    const percentage = value === null ? 0 : feature.domain.percent(value, minimum, maximum);
+    return e(
+      "div",
+      { className: "ha-summary-meter", key: name },
+      e(
+        "div",
+        { className: "ha-summary-meter__label" },
+        e("span", null, feature.domain.label(name)),
+        e("strong", null, value === null ? "—" : feature.domain.formatNumber(value))
+      ),
+      e(
+        "div",
+        {
+          className: "ha-summary-meter__track",
+          role: "meter",
+          "aria-label": feature.domain.label(name),
+          "aria-valuemin": minimum,
+          "aria-valuemax": maximum,
+          "aria-valuenow": value === null ? undefined : value,
+        },
+        e("span", {
+          className: "ha-summary-meter__fill ha-summary-meter__fill--" + tone,
+          style: { width: percentage + "%" },
+        })
+      )
+    );
+  }
+
+  function Summary(props) {
+    const state = props.state;
+    const posture = state ? feature.domain.label(state.posture) : "—";
+    const updated = state ? feature.presentationPrimitives.updatedLabel(state.updatedAt) : "—";
+    return e(
+      "section",
+      { className: "ha-summary", "aria-label": "Current affect summary" },
+      e(
+        "div",
+        { className: "ha-summary__identity" },
+        e(
+          "div",
+          { className: "ha-summary__mood" },
+          e("span", null, "Current mood"),
+          e("strong", null, state ? feature.domain.label(state.mood) : "No affect state"),
+          e(
+            "span",
+            { className: "ha-summary__posture" },
+            "Last response posture: ",
+            e("strong", null, posture)
+          )
+        ),
+        e(
+          "div",
+          { className: "ha-summary__meta" },
+          props.hasError && state
+            ? e("span", { className: "ha-summary__freshness", role: "status" }, "Stale snapshot")
+            : null,
+          e("span", null, "Updated ", e("strong", null, updated)),
+          e("span", null, "Revision ", e("strong", null, state ? String(state.revision) : "—"))
+        )
+      ),
+      e(
+        "div",
+        { className: "ha-summary__meters" },
+        meter(state, "valence", -1, 1, "positive"),
+        meter(state, "arousal", 0, 1, "accent"),
+        meter(state, "frustration", 0, 1, "warning"),
+        meter(state, "offended", 0, 1, "danger")
+      )
+    );
+  }
+
+  return { Summary: Summary };
 })();
 
 feature.presentationTuningControls = (function () {
@@ -993,85 +1098,59 @@ feature.presentationTuningControls = (function () {
   const MAXIMUM = 10;
   const STEP = 0.1;
 
-  function displayValue(value) {
-    return feature.domain.formatNumber(value);
-  }
-
   function parseDraft(value) {
     if (value.trim() === "") return null;
     const number = Number(value);
     return Number.isFinite(number) && number >= MINIMUM && number <= MAXIMUM ? number : null;
   }
 
-  function tuningHeader(configuration) {
-    return e(
-      "div",
-      { className: "ha-tuning-controls__header" },
-      e(
-        "div",
-        null,
-        e("div", { className: "ha-kicker" }, "Session tuning"),
-        e("h2", { id: "ha-tuning-title" }, "Expression gain"),
-        e(
-          "p",
-          { className: "ha-muted" },
-          "Adjust expression strength for this retained session only."
-        )
-      ),
-      configuration.overrideExpressionGain !== null
-        ? e(
-            "span",
-            { className: "ha-tuning-status ha-tuning-status--active" },
-            "Session override active"
-          )
-        : e("span", { className: "ha-tuning-status" }, "Using configured value")
-    );
+  function statusLabel(configuration) {
+    return configuration.overrideExpressionGain !== null
+      ? "Session override active"
+      : "Using configured value";
   }
 
-  function tuningValues(configuration) {
+  function configuredValues(configuration) {
     return e(
       "div",
-      { className: "ha-tuning-values" },
+      { className: "ha-tuning-values", "aria-label": "Expression gain values" },
       e(
         "span",
         null,
         "Configured ",
-        e("strong", null, displayValue(configuration.configuredExpressionGain))
+        e("strong", null, feature.domain.formatNumber(configuration.configuredExpressionGain))
       ),
       e(
         "span",
         null,
         "Effective ",
-        e("strong", null, displayValue(configuration.effectiveExpressionGain))
+        e("strong", null, feature.domain.formatNumber(configuration.effectiveExpressionGain))
       )
     );
   }
 
-  function tuningInputs(draft, value, effective, saving, setDraft) {
+  function fieldInputs(draft, parsed, effective, saving, setDraft) {
+    const rangeValue = parsed === null ? String(effective) : String(parsed);
     return e(
       "div",
-      { className: "ha-tuning-inputs" },
+      { className: "ha-tuning-field__inputs" },
+      e("input", {
+        id: "ha-expression-gain-range",
+        className: "ha-tuning-field__range",
+        type: "range",
+        min: String(MINIMUM),
+        max: String(MAXIMUM),
+        step: String(STEP),
+        value: rangeValue,
+        onChange: function (event) {
+          setDraft(event.target.value);
+        },
+        disabled: saving,
+        "aria-label": "Expression gain slider from zero to ten",
+      }),
       e(
         "label",
-        { className: "ha-tuning-slider", htmlFor: "ha-expression-gain-range" },
-        e("span", null, "Expression gain"),
-        e("input", {
-          id: "ha-expression-gain-range",
-          type: "range",
-          min: String(MINIMUM),
-          max: String(MAXIMUM),
-          step: String(STEP),
-          value: value === null ? String(effective) : String(value),
-          onChange: function (event) {
-            setDraft(event.target.value);
-          },
-          disabled: saving,
-          "aria-label": "Expression gain from zero to ten",
-        })
-      ),
-      e(
-        "label",
-        { className: "ha-tuning-number", htmlFor: "ha-expression-gain-number" },
+        { htmlFor: "ha-expression-gain-number", className: "ha-tuning-field__number" },
         e("span", null, "Value"),
         e("input", {
           id: "ha-expression-gain-number",
@@ -1084,106 +1163,104 @@ feature.presentationTuningControls = (function () {
             setDraft(event.target.value);
           },
           disabled: saving,
-          "aria-label": "Expression gain value",
+          "aria-label": "Expression gain numeric value",
+          "aria-invalid": parsed === null,
         })
       )
     );
   }
 
-  function tuningActions(model, value, changed, saving, overrideActive) {
-    return e(
-      "div",
-      { className: "ha-tuning-actions" },
-      e(
-        "button",
-        {
-          type: "button",
-          className: "ha-control-button",
-          onClick: function () {
-            model.applyExpressionGain(value);
-          },
-          disabled: saving || value === null || !changed,
-        },
-        saving ? "Saving…" : "Apply"
-      ),
-      e(
-        "button",
-        {
-          type: "button",
-          className: "ha-link-button",
-          onClick: model.restoreExpressionGain,
-          disabled: saving || !overrideActive,
-        },
-        "Restore configured value"
-      )
-    );
-  }
-
-  function tuningFeedback(model) {
-    return [
-      model.tuningStatus === "saved"
-        ? e(
-            "p",
-            { className: "ha-tuning-feedback", role: "status", key: "saved" },
-            "Saved for this session."
-          )
-        : null,
-      model.tuningError
-        ? e(
-            "p",
-            {
-              className: "ha-tuning-feedback ha-tuning-feedback--error",
-              role: "alert",
-              key: "error",
-            },
-            model.tuningError
-          )
-        : null,
-    ];
+  function feedback(model, parsed) {
+    if (parsed === null) {
+      return e(
+        "span",
+        { className: "ha-feedback ha-feedback--error", role: "alert" },
+        "Enter a value from 0 to 10."
+      );
+    }
+    if (model.tuningStatus === "saving") {
+      return e("span", { className: "ha-feedback", role: "status" }, "Saving expression gain…");
+    }
+    if (model.tuningStatus === "saved") {
+      return e("span", { className: "ha-feedback", role: "status" }, "Saved for this session.");
+    }
+    if (model.tuningStatus === "conflict" || model.tuningStatus === "unavailable" || model.tuningStatus === "error") {
+      return e(
+        "span",
+        { className: "ha-feedback ha-feedback--error", role: "alert" },
+        model.tuningError || "Unable to update expression gain."
+      );
+    }
+    return null;
   }
 
   function TuningControls(props) {
     const model = props.model;
     const state = props.state;
     const configuration = state.tuningConfiguration;
-    const initialValue = configuration ? configuration.effectiveExpressionGain : null;
-    const draftPair = SDK.hooks.useState(
-      initialValue === null || initialValue === undefined ? "" : String(initialValue)
-    );
+    const effective = configuration ? configuration.effectiveExpressionGain : null;
+    const initialValue = effective === null || effective === undefined ? "" : String(effective);
+    const draftPair = SDK.hooks.useState(initialValue);
     const draft = draftPair[0];
     const setDraft = draftPair[1];
 
     SDK.hooks.useEffect(
       function () {
-        setDraft(initialValue === null || initialValue === undefined ? "" : String(initialValue));
+        setDraft(initialValue);
       },
-      [
-        state.profileId,
-        state.sessionId,
-        configuration ? configuration.effectiveExpressionGain : null,
-      ]
+      [state.profileId, state.sessionId, model.tuningResetToken]
     );
 
     if (!model.controlsEnabled || !configuration || !configuration.available || !model.tuningTarget) {
       return null;
     }
 
-    const value = parseDraft(draft);
+    const parsed = parseDraft(draft);
     const saving = model.tuningStatus === "saving";
     const overrideActive = configuration.overrideExpressionGain !== null;
-    const changed = value !== null && value !== configuration.effectiveExpressionGain;
+    const changed = parsed !== null && parsed !== effective;
     return e(
       "section",
-      { className: "ha-tuning-controls", "aria-labelledby": "ha-tuning-title" },
-      tuningHeader(configuration),
-      tuningValues(configuration),
-      tuningInputs(draft, value, configuration.effectiveExpressionGain, saving, setDraft),
-      tuningActions(model, value, changed, saving, overrideActive),
-      tuningFeedback(model)
+      { className: "ha-tuning-controls", "aria-label": "Expression gain tuning" },
+      e(
+        "div",
+        { className: "ha-tuning-field__heading" },
+        e("label", { htmlFor: "ha-expression-gain-number" }, "Expression gain"),
+        e("span", { className: "ha-tuning-status" }, statusLabel(configuration))
+      ),
+      configuredValues(configuration),
+      fieldInputs(draft, parsed, effective, saving, setDraft),
+      e(
+        "div",
+        { className: "ha-tuning-field__actions" },
+        e(
+          "button",
+          {
+            type: "button",
+            className: "ha-control-button",
+            onClick: function () {
+              if (parsed !== null) return model.applyExpressionGain(parsed);
+            },
+            disabled: saving || parsed === null || !changed,
+          },
+          saving ? "Saving…" : "Apply"
+        ),
+        e(
+          "button",
+          {
+            type: "button",
+            className: "ha-link-button",
+            onClick: model.restoreExpressionGain,
+            disabled: saving || !overrideActive,
+          },
+          "Restore configured value"
+        ),
+        e("div", { className: "ha-tuning-field__feedback", "aria-live": "polite" }, feedback(model, parsed))
+      )
     );
   }
 
-  return { TuningControls: TuningControls };
+  return { TuningControls: TuningControls, parseDraft: parseDraft };
 })();
 
 feature.presentationManualStateControls = (function () {
@@ -1212,11 +1289,14 @@ feature.presentationManualStateControls = (function () {
     return [target.profileId, target.sessionId, participantId || ""].join("\u0000");
   }
 
-  function availableParticipant(relationships, selectedId) {
-    const exists = relationships.some(function (item) {
-      return item.id === selectedId;
-    });
-    if (exists) return selectedId;
+  function selectedParticipant(relationships, selectedId) {
+    if (
+      relationships.some(function (item) {
+        return item.id === selectedId;
+      })
+    ) {
+      return selectedId;
+    }
     return relationships.length ? relationships[0].id : "";
   }
 
@@ -1225,7 +1305,7 @@ feature.presentationManualStateControls = (function () {
   }
 
   function fieldControl(props) {
-    const inputId = "ha-manual-" + props.scope + "-" + props.field + "-" + props.index;
+    const inputId = "ha-manual-" + props.scope + "-" + props.field;
     const initial = String(props.value);
     const draftPair = SDK.hooks.useState(initial);
     const draft = draftPair[0];
@@ -1248,103 +1328,120 @@ feature.presentationManualStateControls = (function () {
 
     return e(
       "div",
-      { className: "ha-manual-field", key: props.field },
+      { className: "ha-manual-field" },
       e(
         "div",
         { className: "ha-manual-field__heading" },
-        e("label", { htmlFor: inputId + "-range" }, fieldLabel(props.field)),
-        e("span", { className: "ha-muted" }, "Current " + feature.domain.formatNumber(props.value))
+        e("label", { htmlFor: inputId + "-number" }, fieldLabel(props.field)),
+        e(
+          "span",
+          { className: "ha-manual-field__current" },
+          "Current ",
+          e("strong", null, feature.domain.formatNumber(props.value))
+        )
       ),
+      e("input", {
+        id: inputId + "-range",
+        className: "ha-manual-field__range",
+        type: "range",
+        min: String(props.minimum),
+        max: String(props.maximum),
+        step: "0.01",
+        value: String(parsed === null ? props.value : parsed),
+        onChange: function (event) {
+          setDraft(event.target.value);
+        },
+        disabled: saving,
+        "aria-label": fieldLabel(props.field) + " slider",
+      }),
       e(
-        "div",
-        { className: "ha-manual-field__inputs" },
+        "label",
+        { htmlFor: inputId + "-number", className: "ha-manual-field__number-label" },
+        e("span", null, "Value"),
         e("input", {
-          id: inputId + "-range",
-          type: "range",
+          id: inputId + "-number",
+          type: "number",
           min: String(props.minimum),
           max: String(props.maximum),
           step: "0.01",
-          value: String(parsed === null ? props.value : parsed),
+          value: draft,
           onChange: function (event) {
             setDraft(event.target.value);
           },
           disabled: saving,
-          "aria-label": fieldLabel(props.field) + " slider",
-        }),
-        e(
-          "label",
-          { htmlFor: inputId + "-number", className: "ha-manual-field__number-label" },
-          e("span", null, "Value"),
-          e("input", {
-            id: inputId + "-number",
-            type: "number",
-            min: String(props.minimum),
-            max: String(props.maximum),
-            step: "0.01",
-            value: draft,
-            onChange: function (event) {
-              setDraft(event.target.value);
-            },
-            disabled: saving,
-            "aria-label": fieldLabel(props.field) + " numeric value",
-          })
-        )
+          "aria-label": fieldLabel(props.field) + " numeric value",
+          "aria-invalid": parsed === null,
+        })
+      ),
+      e(
+        "button",
+        {
+          type: "button",
+          className: "ha-control-button ha-manual-field__apply",
+          onClick: function () {
+            if (parsed !== null) {
+              return props.model.applyManualState(
+                props.scope,
+                props.field,
+                parsed,
+                props.participantId
+              );
+            }
+          },
+          disabled: saving || parsed === null || !changed,
+        },
+        feedback && feedback.status === "saving" ? "Saving…" : "Apply"
       ),
       e(
         "div",
-        { className: "ha-manual-field__actions" },
-        e(
-          "button",
-          {
-            type: "button",
-            className: "ha-control-button",
-            onClick: function () {
-              if (parsed !== null) {
-                return props.model.applyManualState(
-                  props.scope,
-                  props.field,
-                  parsed,
-                  props.participantId
-                );
-              }
-            },
-            disabled: saving || parsed === null || !changed,
-          },
-          feedback && feedback.status === "saving" ? "Saving…" : "Apply"
-        ),
+        { className: "ha-manual-field__feedback", "aria-live": "polite" },
+        feedback && feedback.status === "saving"
+          ? e("span", { className: "ha-feedback", role: "status" }, "Saving this value…")
+          : null,
         parsed === null
-          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
-              "Enter a number from " + props.minimum + " to " + props.maximum + ".")
+          ? e(
+              "span",
+              { className: "ha-feedback ha-feedback--error", role: "alert" },
+              "Enter a number from " + props.minimum + " to " + props.maximum + "."
+            )
           : null,
         feedback && feedback.status === "saved"
-          ? e("span", { className: "ha-manual-feedback", role: "status" },
-              "Saved for this session.")
+          ? e("span", { className: "ha-feedback", role: "status" }, "Saved for this session.")
           : null,
         feedback && feedback.status === "conflict"
-          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
-              "This session changed. The latest values were refreshed; review and apply again.")
+          ? e(
+              "span",
+              { className: "ha-feedback ha-feedback--error", role: "alert" },
+              "Revision conflict. Latest values loaded; review and apply again."
+            )
           : null,
         feedback && feedback.status === "unavailable"
-          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
-              "The selected session or participant is unavailable.")
+          ? e(
+              "span",
+              { className: "ha-feedback ha-feedback--error", role: "alert" },
+              "The selected session or participant is unavailable."
+            )
           : null,
         feedback && feedback.status === "error"
-          ? e("span", { className: "ha-manual-feedback ha-manual-feedback--error", role: "alert" },
-              feedback.message || "Unable to save this value.")
+          ? e(
+              "span",
+              { className: "ha-feedback ha-feedback--error", role: "alert" },
+              feedback.message || "Unable to save this value."
+            )
           : null
       )
     );
   }
 
-  function fieldGroup(title, scope, entries, model, identity, participantId) {
+  function fieldGroup(title, scope, entries, model, target, participantId) {
+    const identity = controlIdentity(target, participantId);
     return e(
       "section",
-      { className: "ha-manual-group", key: scope + (participantId || "") },
+      { className: "ha-manual-group", "aria-label": title },
       e("h3", null, title),
-      entries.map(function (entry, index) {
+      entries.map(function (entry) {
         return e(fieldControl, {
           key: scope + "-" + entry[0] + "-" + (participantId || ""),
-          index: scope + "-" + index + "-" + (participantId || "global"),
           scope: scope,
           field: entry[0],
           minimum: entry[1],
@@ -1358,82 +1455,56 @@ feature.presentationManualStateControls = (function () {
     );
   }
 
-  function targetHeader(target, state) {
-    return e(
-      "header",
-      { className: "ha-manual-controls__header" },
-      e(
-        "div",
-        null,
-        e("div", { className: "ha-kicker" }, "Manual state controls"),
-        e("h2", { id: "ha-manual-controls-title" }, "Adjust selected session"),
-        e(
-          "p",
-          { className: "ha-muted" },
-          "Each Apply updates one source value after passive decay and affects this session only."
-        ),
-        e(
-          "p",
-          { className: "ha-manual-controls__identity" },
-          "Profile ",
-          e("strong", null, target.profileId),
-          " · Session ",
-          e("strong", null, target.sessionId)
-        )
-      ),
-      e("span", { className: "ha-tuning-status" }, "Revision " + state.revision)
-    );
-  }
-
   function RelationshipControls(props) {
     const state = props.state;
     const model = props.model;
     const target = props.target;
-    const pair = SDK.hooks.useState(state.relationships.length ? state.relationships[0].id : "");
-    const selectedId = availableParticipant(state.relationships, pair[0]);
-    const setSelectedId = pair[1];
+    const targetKey = target.profileId + "\u0000" + target.sessionId;
     const relationshipKey = JSON.stringify(
       state.relationships.map(function (item) {
         return item.id;
       })
     );
-    const identity = controlIdentity(target, selectedId);
+    const firstId = state.relationships.length ? state.relationships[0].id : "";
+    const pair = SDK.hooks.useState({ targetKey: targetKey, participantId: firstId });
+    const selection = pair[0];
+    const setSelection = pair[1];
+    const storedId = selection.targetKey === targetKey ? selection.participantId : firstId;
+    const selectedId = selectedParticipant(state.relationships, storedId);
     const relation = state.relationships.find(function (item) {
       return item.id === selectedId;
     });
 
     SDK.hooks.useEffect(
       function () {
-        setSelectedId(function (current) {
-          return availableParticipant(state.relationships, current);
-        });
+        setSelection({ targetKey: targetKey, participantId: selectedId });
       },
-      [target.profileId, target.sessionId, relationshipKey]
+      [targetKey, relationshipKey]
     );
 
     if (!state.relationships.length) {
       return e(
         "section",
-        { className: "ha-manual-group" },
+        { className: "ha-manual-group", "aria-label": "Relationship controls" },
         e("h3", null, "Existing participant relationship"),
         e("p", { className: "ha-muted" }, "No participant relationships exist in this session yet.")
       );
     }
     return e(
       "section",
-      { className: "ha-manual-group" },
+      { className: "ha-manual-group", "aria-label": "Relationship controls" },
       e("h3", null, "Existing participant relationship"),
       e(
         "label",
         { className: "ha-manual-participant", htmlFor: "ha-manual-participant-select" },
-        e("span", null, "Participant ID"),
+        e("span", null, "Participant"),
         e(
           "select",
           {
             id: "ha-manual-participant-select",
             value: selectedId,
             onChange: function (event) {
-              setSelectedId(event.target.value);
+              setSelection({ targetKey: targetKey, participantId: event.target.value });
             },
           },
           state.relationships.map(function (item) {
@@ -1460,7 +1531,7 @@ feature.presentationManualStateControls = (function () {
               ];
             }),
             model,
-            identity,
+            target,
             selectedId
           )
         : null
@@ -1472,26 +1543,33 @@ feature.presentationManualStateControls = (function () {
     const state = props.state;
     const target = model.manualTarget;
     if (!model.controlsEnabled || !target || state.modelVersion !== 2) return null;
-    const identity = controlIdentity(target, "");
-    const affect = AFFECT_FIELDS.map(function (entry) {
-      return [entry[0], entry[1], entry[2], state.affect[entry[0]]];
-    });
 
-    return e(
-      "section",
-      { className: "ha-manual-controls", "aria-labelledby": "ha-manual-controls-title" },
-      targetHeader(target, state),
-      fieldGroup("Affect", "affect", affect, model, identity, null),
-      fieldGroup(
+    if (props.group === "affect") {
+      return fieldGroup(
+        "Affect",
+        "affect",
+        AFFECT_FIELDS.map(function (entry) {
+          return [entry[0], entry[1], entry[2], state.affect[entry[0]]];
+        }),
+        model,
+        target,
+        null
+      );
+    }
+    if (props.group === "atmosphere") {
+      return fieldGroup(
         "Atmosphere",
         "atmosphere",
         [["atmosphere_tension", 0, 1, state.atmosphereSource]],
         model,
-        identity,
+        target,
         null
-      ),
-      e(RelationshipControls, { state: state, model: model, target: target })
-    );
+      );
+    }
+    if (props.group === "relationship") {
+      return e(RelationshipControls, { state: state, model: model, target: target });
+    }
+    return null;
   }
 
   return { ManualStateControls: ManualStateControls };
@@ -1500,182 +1578,189 @@ feature.presentationManualStateControls = (function () {
 feature.presentationStateView = (function () {
   const e = SDK.React.createElement;
   const primitives = feature.presentationPrimitives;
-  const sectionCard = primitives.sectionCard;
-  const statusBadge = primitives.statusBadge;
-  const metric = primitives.metric;
-  const chips = primitives.chips;
 
-  function moodCore(state) {
-    const valence = feature.domain.percent(state.affect.valence, -1, 1);
-    const arousal = feature.domain.percent(state.affect.arousal, 0, 1);
-    const frustration = feature.domain.percent(state.affect.frustration, 0, 1);
+  function panel(title, content, className) {
     return e(
-      "div",
-      {
-        className: "ha-core",
-        style: {
-          "--ha-valence": valence + "%",
-          "--ha-arousal": arousal + "%",
-          "--ha-frustration": frustration + "%",
-        },
-      },
-      e("div", { className: "ha-core__halo" }),
-      e(
-        "div",
-        { className: "ha-core__body" },
-        e("span", { className: "ha-core__label" }, "Current mood"),
-        e("strong", null, feature.domain.label(state.mood)),
-        e(
-          "span",
-          { className: "ha-core__posture" },
-          e("span", null, "Last response posture"),
-          e("strong", null, feature.domain.label(state.posture))
-        )
-      )
+      "section",
+      { className: "ha-panel " + (className || "") },
+      e("h2", null, title),
+      content
     );
   }
 
-  function relationshipCard(relation) {
+  function stateFacts(state) {
+    const facts = [
+      ["Atmosphere", feature.domain.formatNumber(state.atmosphere)],
+      [
+        "Expression drive",
+        state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive),
+      ],
+      ["Model", "v" + state.modelVersion],
+      ["Migration", state.migrationRequired ? "Required" : "Current"],
+    ];
     return e(
-      "article",
-      { className: "ha-relationship", key: relation.id },
+      "dl",
+      { className: "ha-fact-list" },
+      facts.map(function (fact) {
+        return e(
+          "div",
+          { className: "ha-fact", key: fact[0] },
+          e("dt", null, fact[0]),
+          e("dd", null, fact[1])
+        );
+      })
+    );
+  }
+
+  function conflictList(conflicts) {
+    if (!conflicts.length) return e("p", { className: "ha-muted" }, "No open conflicts.");
+    return e(
+      "ul",
+      { className: "ha-compact-list" },
+      conflicts.map(function (conflict) {
+        return e(
+          "li",
+          { key: conflict.id },
+          e("strong", { title: conflict.id }, conflict.id),
+          e("span", null, feature.domain.label(conflict.status)),
+          e("span", null, "Heat " + feature.domain.formatNumber(conflict.heat))
+        );
+      })
+    );
+  }
+
+  function relationIds(state) {
+    return state.relationships.map(function (relation) {
+      return relation.id;
+    });
+  }
+
+  function relationshipDetail(relation) {
+    if (!relation) return e("p", { className: "ha-muted" }, "No participant relationships have been recorded.");
+    return e(
+      "div",
+      { className: "ha-relationship-detail" },
       e(
         "div",
-        { className: "ha-relationship__top" },
+        { className: "ha-relationship-detail__heading" },
         e("strong", { title: relation.id }, relation.id),
-        relation.tension >= 0.5
-          ? statusBadge("Tense", "warning")
-          : statusBadge("Observed", "muted")
+        primitives.statusBadge(
+          relation.tension >= 0.5 ? "Tense" : "Observed",
+          relation.tension >= 0.5 ? "warning" : "muted"
+        )
       ),
       e(
         "div",
-        { className: "ha-mini-grid" },
-        metric("Trust", relation.trust, -1, 1, "positive"),
-        metric("Affinity", relation.affinity, -1, 1, "positive"),
-        metric("Respect", relation.respect, -1, 1, "accent"),
-        metric("Irritation", relation.irritation, 0, 1, "danger"),
-        metric("Tension", relation.tension, 0, 1, "warning")
+        { className: "ha-relationship-metrics" },
+        primitives.metric("Trust", relation.trust, -1, 1, "positive"),
+        primitives.metric("Affinity", relation.affinity, -1, 1, "positive"),
+        primitives.metric("Respect", relation.respect, -1, 1, "accent"),
+        primitives.metric("Irritation", relation.irritation, 0, 1, "danger"),
+        primitives.metric("Tension", relation.tension, 0, 1, "warning")
       )
     );
   }
 
-  function renderState(state, hasError, tuningControls) {
-    const updated = primitives.updatedLabel(state.updatedAt);
-    const expression =
-      state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive);
+  function RelationshipsSummary(props) {
+    const state = props.state;
+    const ids = relationIds(state);
+    const targetKey = state.profileId + "\u0000" + state.sessionId;
+    const relationshipKey = JSON.stringify(ids);
+    const initialId = ids.length ? ids[0] : "";
+    const selectionPair = SDK.hooks.useState({ targetKey: targetKey, participantId: initialId });
+    const selection = selectionPair[0];
+    const setSelection = selectionPair[1];
+    const storedId = selection.targetKey === targetKey ? selection.participantId : initialId;
+    const selectedId = ids.indexOf(storedId) >= 0 ? storedId : initialId;
+    const relation = state.relationships.find(function (item) {
+      return item.id === selectedId;
+    });
 
+    SDK.hooks.useEffect(
+      function () {
+        setSelection({ targetKey: targetKey, participantId: selectedId });
+      },
+      [targetKey, relationshipKey]
+    );
+
+    return panel(
+      "Relationships",
+      ids.length
+        ? e(
+            "div",
+            { className: "ha-relationships-summary" },
+            e(
+              "label",
+              { className: "ha-relationship-picker", htmlFor: "ha-state-participant-select" },
+              e("span", null, ids.length + " participant" + (ids.length === 1 ? "" : "s")),
+              e(
+                "select",
+                {
+                  id: "ha-state-participant-select",
+                  value: selectedId,
+                  onChange: function (event) {
+                    setSelection({ targetKey: targetKey, participantId: event.target.value });
+                  },
+                },
+                state.relationships.map(function (item) {
+                  return e("option", { value: item.id, key: item.id }, item.id);
+                })
+              )
+            ),
+            relationshipDetail(relation)
+          )
+        : relationshipDetail(null),
+      "ha-panel--relationships"
+    );
+  }
+
+  function tuningSummary(state) {
+    if (!state.tuning.length) return e("p", { className: "ha-muted" }, "No session overrides are active.");
+    return e(
+      "div",
+      { className: "ha-tuning-list" },
+      state.tuning.map(function (entry) {
+        return e(
+          "span",
+          { className: "ha-chip ha-chip--muted", key: entry[0] },
+          feature.domain.label(entry[0]) + " " + feature.domain.formatNumber(entry[1])
+        );
+      })
+    );
+  }
+
+  function StateView(props) {
+    const state = props.state;
     return e(
       "div",
       { className: "ha-state-view" },
-      hasError
+      props.hasError
         ? e(
             "div",
             { className: "ha-notice", role: "status" },
             "Live refresh is temporarily unavailable. Showing the last valid snapshot."
           )
         : null,
-      tuningControls,
+      panel("Session context", stateFacts(state), "ha-panel--facts"),
       e(
-        "header",
-        { className: "ha-hero" },
-        e(
-          "div",
-          { className: "ha-hero__copy" },
-          e("div", { className: "ha-kicker" }, "Hermes Affect / live state"),
-          e("h1", null, state.profileId),
-          e(
-            "p",
-            null,
-            "A local, session-scoped view of emotional posture and relationship dynamics."
-          ),
-          e(
-            "div",
-            { className: "ha-hero__meta" },
-            primitives.statusBadge(hasError ? "Stale" : "Live", hasError ? "warning" : "success"),
-            e("span", null, "Updated " + updated),
-            e("span", null, "Revision " + state.revision),
-            e("span", { title: state.sessionId }, "Session " + state.sessionId)
-          )
-        ),
-        moodCore(state)
-      ),
-      e(
-        "section",
-        { className: "ha-grid ha-grid--overview" },
-        sectionCard(
-          "Affect balance",
-          "Internal signal",
-          e(
-            "div",
-            { className: "ha-metrics" },
-            metric("Valence", state.affect.valence, -1, 1, "positive"),
-            metric("Arousal", state.affect.arousal, 0, 1, "accent"),
-            metric("Frustration", state.affect.frustration, 0, 1, "warning"),
-            metric("Offended", state.affect.offended, 0, 1, "danger")
-          )
-        ),
-        sectionCard(
-          "Expression",
-          "Behavioral projection",
-          e(
-            "div",
-            { className: "ha-stat-grid" },
-            e("div", { className: "ha-stat" }, e("span", null, "Drive"), e("strong", null, expression)),
-            e(
-              "div",
-              { className: "ha-stat" },
-              e("span", null, "Atmosphere"),
-              e("strong", null, feature.domain.formatNumber(state.atmosphere))
-            ),
-            e("div", { className: "ha-stat" }, e("span", null, "Model"), e("strong", null, "v" + state.modelVersion)),
-            e(
-              "div",
-              { className: "ha-stat" },
-              e("span", null, "Migration"),
-              e("strong", null, state.migrationRequired ? "Required" : "Current")
-            )
-          )
-        )
-      ),
-      e(
-        "section",
-        { className: "ha-grid ha-grid--context" },
-        sectionCard(
+        "div",
+        { className: "ha-state-grid" },
+        panel(
           "Active sensitivities",
-          "Current turn",
-          chips(state.sensitivities, "No active sensitivities.", "accent")
+          primitives.chips(state.sensitivities, "No active sensitivities.", "accent")
         ),
-        sectionCard("Open conflicts", "Relationship heat", chips(state.conflicts, "No open conflicts.", "warning"))
+        panel("Open conflicts", conflictList(state.conflicts))
       ),
-      sectionCard(
-        "Relationships",
-        state.relationships.length + " current participant" + (state.relationships.length === 1 ? "" : "s"),
-        state.relationships.length
-          ? e("div", { className: "ha-relationships" }, state.relationships.map(relationshipCard))
-          : e("p", { className: "ha-muted" }, "No participant relationships have been recorded in this session."),
-        "ha-card--relationships"
-      ),
-      state.tuning.length
-        ? sectionCard(
-            "Session tuning",
-            "Temporary overrides",
-            e(
-              "div",
-              { className: "ha-chip-row" },
-              state.tuning.map(function (entry) {
-                return e(
-                  "span",
-                  { className: "ha-chip ha-chip--muted", key: entry[0] },
-                  feature.domain.label(entry[0]) + " " + entry[1].toFixed(2)
-                );
-              })
-            )
-          )
-        : null
+      e(
+        "div",
+        { className: "ha-state-grid ha-state-grid--lower" },
+        e(RelationshipsSummary, { state: state }),
+        panel("Active tuning", tuningSummary(state))
+      )
     );
   }
 
-  return { renderState: renderState };
+  return { StateView: StateView, RelationshipsSummary: RelationshipsSummary };
 })();
 
 feature.presentationSessionNavigator = (function () {
@@ -1730,9 +1815,16 @@ feature.presentationSessionNavigator = (function () {
       : LATEST_OPTION;
   }
 
-  function selectedIdentity(selection) {
-    return selection.mode === "exact"
-      ? selection.profileId + " / " + selection.sessionId
+  function selectedIdentity(model) {
+    if (model.selection.mode === "exact") {
+      return model.selection.profileId + " / " + model.selection.sessionId;
+    }
+    const state =
+      model.hasMatchingResponse && model.response && model.response.state
+        ? model.response.state
+        : null;
+    return state
+      ? "Latest session — " + state.profileId + " / " + state.sessionId
       : "Latest session";
   }
 
@@ -1800,24 +1892,6 @@ feature.presentationSessionNavigator = (function () {
     }
   }
 
-  function navigatorHeader() {
-    return e(
-      "div",
-      { className: "ha-session-navigator__header" },
-      e(
-        "div",
-        null,
-        e("div", { className: "ha-kicker" }, "Session navigator"),
-        e("h2", { id: "ha-session-navigator-title" }, "Affect state session"),
-        e(
-          "p",
-          { className: "ha-muted" },
-          "Choose Latest session or a retained profile/session snapshot."
-        )
-      )
-    );
-  }
-
   function selectorControls(model, groups) {
     return e(
       "div",
@@ -1869,7 +1943,7 @@ feature.presentationSessionNavigator = (function () {
   }
 
   function selectedSessionSummary(model) {
-    const identity = selectedIdentity(model.selection);
+    const identity = selectedIdentity(model);
     const selectionStatus = model.selectedStateError
       ? e(
           "p",
@@ -1932,8 +2006,7 @@ feature.presentationSessionNavigator = (function () {
     );
     return e(
       "section",
-      { className: "ha-session-navigator", "aria-labelledby": "ha-session-navigator-title" },
-      navigatorHeader(),
+      { className: "ha-session-bar", "aria-label": "Session selection" },
       selectorControls(model, groups),
       selectedSessionSummary(model),
       catalogFeedback(model)
@@ -1947,22 +2020,110 @@ feature.presentationSessionNavigator = (function () {
   };
 })();
 
+feature.presentationAdjustView = (function () {
+  const e = SDK.React.createElement;
+  const manualControls = feature.presentationManualStateControls;
+  const tuningControls = feature.presentationTuningControls;
+  const GROUPS = [
+    ["affect", "Affect"],
+    ["atmosphere", "Atmosphere"],
+    ["relationship", "Relationship"],
+    ["expression", "Expression"],
+  ];
+
+  function expressionContent(model, state) {
+    const configuration = state.tuningConfiguration;
+    if (!configuration || !configuration.available || !model.tuningTarget) {
+      return e("p", { className: "ha-muted", role: "status" }, "Expression tuning is unavailable for this state.");
+    }
+    return e(tuningControls.TuningControls, { model: model, state: state });
+  }
+
+  function groupContent(group, model, state) {
+    if (group === "expression") return expressionContent(model, state);
+    return e(manualControls.ManualStateControls, {
+      key: group,
+      group: group,
+      model: model,
+      state: state,
+    });
+  }
+
+  function AdjustView(props) {
+    const model = props.model;
+    const state = props.state;
+    const targetKey = state.profileId + "\u0000" + state.sessionId;
+    const groupPair = SDK.hooks.useState({ targetKey: targetKey, group: "affect" });
+    const savedGroup = groupPair[0];
+    const setSavedGroup = groupPair[1];
+    const activeGroup = savedGroup.targetKey === targetKey ? savedGroup.group : "affect";
+
+    SDK.hooks.useEffect(
+      function () {
+        setSavedGroup({ targetKey: targetKey, group: activeGroup });
+      },
+      [targetKey]
+    );
+
+    return e(
+      "section",
+      { className: "ha-adjust-view", "aria-label": "Adjust selected session" },
+      e(
+        "div",
+        { className: "ha-adjust-groups", role: "group", "aria-label": "Adjustment group" },
+        GROUPS.map(function (group) {
+          return e(
+            "button",
+            {
+              type: "button",
+              key: group[0],
+              className: "ha-adjust-groups__button",
+              "aria-pressed": activeGroup === group[0],
+              onClick: function () {
+                setSavedGroup({ targetKey: targetKey, group: group[0] });
+              },
+            },
+            group[1]
+          );
+        })
+      ),
+      e(
+        "div",
+        { className: "ha-adjust-panels" },
+        GROUPS.map(function (group) {
+          return e(
+            "section",
+            {
+              key: group[0],
+              className: "ha-adjust-panel",
+              hidden: activeGroup !== group[0],
+              "aria-label": group[1] + " controls",
+            },
+            groupContent(group[0], model, state)
+          );
+        })
+      )
+    );
+  }
+
+  return { AdjustView: AdjustView };
+})();
+
 feature.presentation = (function () {
   const e = SDK.React.createElement;
   const primitives = feature.presentationPrimitives;
-  const stateView = feature.presentationStateView;
   const navigator = feature.presentationSessionNavigator;
-  const tuning = feature.presentationTuningControls;
-  const manualControls = feature.presentationManualStateControls;
+  const stateSummary = feature.presentationStateSummary;
+  const stateView = feature.presentationStateView;
+  const adjustView = feature.presentationAdjustView;
 
   function selectionPanel(model) {
     if (model.selectedStateLoading) {
       return e(
         "div",
         { className: "ha-selection-panel", role: "status" },
-        e("div", { className: "ha-loading-mark", "aria-hidden": "true" }, "…"),
         e("h2", null, "Loading selected session"),
-        e("p", null, "The current layout will update when this exact profile/session snapshot arrives.")
+        e("p", null, "Waiting for the selected profile/session snapshot.")
       );
     }
     if (model.selection.mode === "latest" && !model.selectedStateError) {
@@ -1972,7 +2133,6 @@ feature.presentation = (function () {
       return e(
         "div",
         { className: "ha-selection-panel", role: "alert" },
-        e("div", { className: "ha-empty__icon", "aria-hidden": "true" }, "◇"),
         e("h2", null, "Selected session unavailable"),
         e(
           "p",
@@ -1984,38 +2144,136 @@ feature.presentation = (function () {
     return primitives.emptyState();
   }
 
+  function currentTargetKey(model) {
+    if (model.selection.mode === "exact") {
+      return "exact:" + JSON.stringify([model.selection.profileId, model.selection.sessionId]);
+    }
+    if (model.hasMatchingResponse && model.response && model.response.state) {
+      return "latest:" + JSON.stringify([
+        model.response.state.profileId,
+        model.response.state.sessionId,
+      ]);
+    }
+    return "latest:pending";
+  }
+
+  function supportsAdjust(model, state) {
+    return Boolean(model.controlsEnabled && model.manualTarget && state && state.modelVersion === 2);
+  }
+
+  function changeTabFromKey(event, activeTab, canEdit, chooseTab) {
+    const available = canEdit ? ["state", "adjust"] : ["state"];
+    let index = available.indexOf(activeTab);
+    if (event.key === "ArrowRight") index = (index + 1) % available.length;
+    else if (event.key === "ArrowLeft") index = (index - 1 + available.length) % available.length;
+    else if (event.key === "Home") index = 0;
+    else if (event.key === "End") index = available.length - 1;
+    else return;
+    event.preventDefault();
+    chooseTab(available[index]);
+    const buttons = event.currentTarget.parentNode.querySelectorAll('[role="tab"]');
+    if (buttons[index]) buttons[index].focus();
+  }
+
+  function tabButton(name, label, activeTab, onSelect, onKeyDown) {
+    const active = activeTab === name;
+    return e(
+      "button",
+      {
+        type: "button",
+        role: "tab",
+        id: "ha-tab-" + name,
+        "aria-controls": "ha-panel-" + name,
+        "aria-selected": active,
+        tabIndex: active ? 0 : -1,
+        onClick: function () {
+          onSelect(name);
+        },
+        onKeyDown: onKeyDown,
+      },
+      label
+    );
+  }
+
   function createPage(initialResponse) {
     return function AffectDashboardPage() {
       const model = feature.application.useDashboardState(initialResponse);
-      const stateContent =
-        model.hasMatchingResponse && model.response.state
-          ? stateView.renderState(
-              model.response.state,
-              model.hasError,
-              e(
-                "div",
-                { className: "ha-state-editors" },
-                e(manualControls.ManualStateControls, {
-                  key: model.manualTarget
-                    ? model.manualTarget.profileId + "\u0000" + model.manualTarget.sessionId
-                    : "no-target",
-                  model: model,
-                  state: model.response.state,
-                }),
-                e(tuning.TuningControls, { model: model, state: model.response.state })
-              )
-            )
-          : selectionPanel(model);
+      const hasState = Boolean(model.hasMatchingResponse && model.response && model.response.state);
+      const state = hasState ? model.response.state : null;
+      const canEdit = supportsAdjust(model, state);
+      const targetKey = currentTargetKey(model);
+      const tabPair = SDK.hooks.useState({ targetKey: targetKey, tab: "state" });
+      const tabState = tabPair[0];
+      const setTabState = tabPair[1];
+      const activeTab =
+        !canEdit || tabState.targetKey !== targetKey ? "state" : tabState.tab;
+
+      SDK.hooks.useEffect(
+        function () {
+          if (!canEdit || tabState.targetKey !== targetKey) {
+            setTabState({ targetKey: targetKey, tab: "state" });
+          }
+        },
+        [targetKey, canEdit]
+      );
+
+      function selectTab(tab) {
+        if (tab === "adjust" && !canEdit) return;
+        setTabState({ targetKey: targetKey, tab: tab });
+      }
+
+      function onTabKeyDown(event) {
+        changeTabFromKey(event, activeTab, canEdit, selectTab);
+      }
+
       return e(
         "div",
         { className: "ha-page" },
         e(navigator.SessionNavigator, { model: model }),
-        e("main", { className: "ha-state-column" }, stateContent)
+        e(stateSummary.Summary, { state: state, hasError: model.hasError }),
+        e(
+          "div",
+          { className: "ha-view-tabs", role: "tablist", "aria-label": "Affect dashboard view" },
+          tabButton("state", "State", activeTab, selectTab, onTabKeyDown),
+          canEdit ? tabButton("adjust", "Adjust", activeTab, selectTab, onTabKeyDown) : null
+        ),
+        e(
+          "main",
+          { className: "ha-view-panels" },
+          e(
+            "section",
+            {
+              className: "ha-view-panel",
+              id: "ha-panel-state",
+              role: "tabpanel",
+              "aria-labelledby": "ha-tab-state",
+              hidden: activeTab !== "state",
+              tabIndex: 0,
+            },
+            hasState
+              ? e(stateView.StateView, { state: state, hasError: model.hasError })
+              : selectionPanel(model)
+          ),
+          canEdit
+            ? e(
+                "section",
+                {
+                  className: "ha-view-panel",
+                  id: "ha-panel-adjust",
+                  role: "tabpanel",
+                  "aria-labelledby": "ha-tab-adjust",
+                  hidden: activeTab !== "adjust",
+                  tabIndex: 0,
+                },
+                e(adjustView.AdjustView, { model: model, state: state })
+              )
+            : null
+        )
       );
     };
   }
 
-  return { createPage: createPage };
+  return { createPage: createPage, supportsAdjust: supportsAdjust };
 })();
 
 feature.application.bootstrap();

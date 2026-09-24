@@ -1,0 +1,123 @@
+.ha-page,
+.ha-page * {
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.ha-page [hidden] {
+  display: none !important;
+}
+
+.ha-session-identity,
+.ha-session-status,
+.ha-compact-list,
+.ha-relationship-detail,
+.ha-manual-controls__identity {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .ha-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ha-summary__identity {
+    justify-content: flex-start;
+  }
+
+  .ha-summary__meta {
+    grid-template-columns: repeat(2, minmax(0, max-content));
+    gap: 0.3rem 0.8rem;
+  }
+
+  .ha-state-grid,
+  .ha-state-grid--lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ha-relationship-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .ha-page {
+    gap: 0.55rem;
+    padding: 0.45rem;
+  }
+
+  .ha-session-bar,
+  .ha-summary,
+  .ha-panel {
+    padding: 0.65rem;
+  }
+
+  .ha-session-controls {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.45rem;
+  }
+
+  .ha-session-selector {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+
+  .ha-session-actions {
+    width: 100%;
+  }
+
+  .ha-session-actions > * {
+    flex: 1 1 0;
+  }
+
+  .ha-summary__meters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.7rem;
+  }
+
+  .ha-summary__meta {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ha-fact-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ha-relationship-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .ha-relationship-picker {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.3rem;
+  }
+
+  .ha-manual-field {
+    grid-template-columns: minmax(0, 1fr) minmax(4.75rem, 5.5rem) auto;
+    grid-template-areas:
+      "heading heading heading"
+      "range number apply"
+      "feedback feedback feedback";
+    gap: 0.4rem;
+  }
+
+  .ha-manual-field__apply {
+    justify-self: end;
+  }
+
+  .ha-tuning-field__inputs {
+    grid-template-columns: minmax(0, 1fr) minmax(4.75rem, 5.5rem);
+    gap: 0.5rem;
+  }
+
+  .ha-adjust-groups__button {
+    flex: 1 1 6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ha-summary-meter__fill,
+  .ha-meter__fill {
+    transition: none;
+  }
+}

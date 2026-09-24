@@ -1,0 +1,224 @@
+.ha-adjust-view {
+  display: grid;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.ha-adjust-groups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.ha-adjust-groups__button {
+  min-height: 2.2rem;
+  padding: 0.35rem 0.7rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  color: var(--color-muted-foreground);
+  background: var(--color-card);
+  font-size: 0.74rem;
+  font-weight: 650;
+}
+
+.ha-adjust-groups__button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--ha-accent) 65%, var(--color-border));
+  color: var(--color-foreground);
+  background: color-mix(in srgb, var(--ha-accent) 12%, var(--color-card));
+}
+
+.ha-adjust-panel {
+  min-width: 0;
+}
+
+.ha-manual-group,
+.ha-tuning-controls {
+  display: grid;
+  min-width: 0;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--ha-accent) 30%, var(--color-border));
+  border-radius: calc(var(--radius, 0.5rem) * 1.1);
+  background: color-mix(in srgb, var(--color-card) 97%, var(--ha-accent) 3%);
+}
+
+.ha-manual-group h3 {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.ha-manual-field {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) minmax(7rem, 1.7fr) minmax(5.5rem, 7rem) auto;
+  grid-template-areas:
+    "heading heading heading heading"
+    "range number apply apply"
+    "feedback feedback feedback feedback";
+  align-items: center;
+  gap: 0.45rem 0.7rem;
+  min-width: 0;
+  padding-top: 0.55rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.ha-manual-field__heading {
+  display: flex;
+  grid-area: heading;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 0.75rem;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.ha-manual-field__heading label {
+  color: var(--color-foreground);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.ha-manual-field__current,
+.ha-manual-field__number-label,
+.ha-manual-participant,
+.ha-tuning-status,
+.ha-tuning-values {
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+}
+
+.ha-manual-field__current strong,
+.ha-tuning-values strong {
+  color: var(--color-foreground);
+  font-family: var(--theme-font-mono, ui-monospace, monospace);
+}
+
+.ha-manual-field__range,
+.ha-tuning-field__range {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  accent-color: var(--ha-accent);
+}
+
+.ha-manual-field__range {
+  grid-area: range;
+}
+
+.ha-manual-field__number-label,
+.ha-manual-participant {
+  display: grid;
+  grid-area: number;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.ha-manual-field__number-label input,
+.ha-manual-participant select,
+.ha-tuning-field__number input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius, 0.5rem);
+  color: var(--color-foreground);
+  background: var(--color-background);
+  font: inherit;
+}
+
+.ha-manual-field__apply {
+  grid-area: apply;
+  justify-self: start;
+}
+
+.ha-manual-field__feedback {
+  display: flex;
+  grid-area: feedback;
+  min-height: 0;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.7rem;
+}
+
+.ha-feedback {
+  color: var(--ha-accent);
+  font-size: 0.7rem;
+}
+
+.ha-feedback--error {
+  color: var(--ha-warning);
+}
+
+.ha-manual-controls__identity {
+  margin: 0;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+  overflow-wrap: anywhere;
+}
+
+.ha-manual-controls__identity strong {
+  color: var(--color-foreground);
+  font-family: var(--theme-font-mono, ui-monospace, monospace);
+}
+
+.ha-tuning-controls {
+  gap: 0.55rem;
+}
+
+.ha-tuning-field__heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.4rem 0.8rem;
+  flex-wrap: wrap;
+}
+
+.ha-tuning-field__heading label {
+  color: var(--color-foreground);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.ha-tuning-values {
+  display: flex;
+  gap: 0.35rem 0.85rem;
+  flex-wrap: wrap;
+}
+
+.ha-tuning-status {
+  color: var(--ha-accent);
+}
+
+.ha-tuning-field__inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(5.5rem, 7rem);
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.ha-tuning-field__number {
+  display: grid;
+  gap: 0.25rem;
+  color: var(--color-muted-foreground);
+  font-size: 0.7rem;
+}
+
+.ha-tuning-field__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem 0.8rem;
+  flex-wrap: wrap;
+}
+
+.ha-tuning-field__feedback {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.ha-manual-group input:focus-visible,
+.ha-manual-group select:focus-visible,
+.ha-manual-group button:focus-visible,
+.ha-tuning-controls input:focus-visible,
+.ha-tuning-controls button:focus-visible {
+  outline: 2px solid var(--ha-accent);
+  outline-offset: 2px;
+}

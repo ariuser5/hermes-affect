@@ -1,27 +1,9 @@
 feature.presentationPrimitives = (function () {
   const e = SDK.React.createElement;
-  const Card = SDK.components.Card;
-  const CardContent = SDK.components.CardContent;
-  const CardHeader = SDK.components.CardHeader;
-  const CardTitle = SDK.components.CardTitle;
   const Badge = SDK.components.Badge;
 
   function statusBadge(text, tone) {
     return e(Badge, { className: "ha-badge ha-badge--" + tone }, text);
-  }
-
-  function sectionCard(title, eyebrow, content, className) {
-    return e(
-      Card,
-      { className: "ha-card " + (className || "") },
-      e(
-        CardHeader,
-        { className: "ha-card__header" },
-        eyebrow ? e("div", { className: "ha-eyebrow" }, eyebrow) : null,
-        e(CardTitle, { className: "ha-card__title" }, title)
-      ),
-      e(CardContent, { className: "ha-card__content" }, content)
-    );
   }
 
   function metric(label, value, minimum, maximum, tone) {
@@ -68,7 +50,6 @@ feature.presentationPrimitives = (function () {
     return e(
       "div",
       { className: "ha-empty" },
-      e("div", { className: "ha-empty__icon", "aria-hidden": "true" }, "◇"),
       e("h2", null, "No affect state yet"),
       e(
         "p",
@@ -89,7 +70,6 @@ feature.presentationPrimitives = (function () {
 
   return {
     statusBadge: statusBadge,
-    sectionCard: sectionCard,
     metric: metric,
     chips: chips,
     emptyState: emptyState,

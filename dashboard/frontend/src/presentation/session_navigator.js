@@ -50,9 +50,16 @@ feature.presentationSessionNavigator = (function () {
       : LATEST_OPTION;
   }
 
-  function selectedIdentity(selection) {
-    return selection.mode === "exact"
-      ? selection.profileId + " / " + selection.sessionId
+  function selectedIdentity(model) {
+    if (model.selection.mode === "exact") {
+      return model.selection.profileId + " / " + model.selection.sessionId;
+    }
+    const state =
+      model.hasMatchingResponse && model.response && model.response.state
+        ? model.response.state
+        : null;
+    return state
+      ? "Latest session — " + state.profileId + " / " + state.sessionId
       : "Latest session";
   }
 
@@ -120,24 +127,6 @@ feature.presentationSessionNavigator = (function () {
     }
   }
 
-  function navigatorHeader() {
-    return e(
-      "div",
-      { className: "ha-session-navigator__header" },
-      e(
-        "div",
-        null,
-        e("div", { className: "ha-kicker" }, "Session navigator"),
-        e("h2", { id: "ha-session-navigator-title" }, "Affect state session"),
-        e(
-          "p",
-          { className: "ha-muted" },
-          "Choose Latest session or a retained profile/session snapshot."
-        )
-      )
-    );
-  }
-
   function selectorControls(model, groups) {
     return e(
       "div",
@@ -189,7 +178,7 @@ feature.presentationSessionNavigator = (function () {
   }
 
   function selectedSessionSummary(model) {
-    const identity = selectedIdentity(model.selection);
+    const identity = selectedIdentity(model);
     const selectionStatus = model.selectedStateError
       ? e(
           "p",
@@ -252,8 +241,7 @@ feature.presentationSessionNavigator = (function () {
     );
     return e(
       "section",
-      { className: "ha-session-navigator", "aria-labelledby": "ha-session-navigator-title" },
-      navigatorHeader(),
+      { className: "ha-session-bar", "aria-label": "Session selection" },
       selectorControls(model, groups),
       selectedSessionSummary(model),
       catalogFeedback(model)

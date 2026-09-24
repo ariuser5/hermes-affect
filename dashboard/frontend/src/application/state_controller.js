@@ -41,6 +41,7 @@ feature.application = (function () {
       controlsEnabled: Boolean(state.response && state.response.controlsEnabled),
       tuningStatus: tuning.status,
       tuningError: tuning.error,
+      tuningResetToken: tuning.resetToken,
       applyExpressionGain: tuning.applyExpressionGain,
       restoreExpressionGain: tuning.restoreExpressionGain,
       manualTarget: manual.target,

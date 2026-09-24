@@ -17,14 +17,20 @@ SOURCE_FILES = (
     SOURCE_ROOT / "application" / "manual_state_controller.js",
     SOURCE_ROOT / "application" / "state_controller.js",
     SOURCE_ROOT / "presentation" / "primitives.js",
+    SOURCE_ROOT / "presentation" / "state_summary.js",
     SOURCE_ROOT / "presentation" / "tuning_controls.js",
     SOURCE_ROOT / "presentation" / "manual_state_controls.js",
     SOURCE_ROOT / "presentation" / "state_view.js",
     SOURCE_ROOT / "presentation" / "session_navigator.js",
+    SOURCE_ROOT / "presentation" / "adjust_view.js",
     SOURCE_ROOT / "presentation" / "page.js",
     SOURCE_ROOT / "index.js",
 )
-STYLE_SOURCE = SOURCE_ROOT / "presentation" / "style.css"
+STYLE_SOURCES = (
+    SOURCE_ROOT / "presentation" / "layout.css",
+    SOURCE_ROOT / "presentation" / "controls.css",
+    SOURCE_ROOT / "presentation" / "responsive.css",
+)
 BUNDLE_PATH = DIST_ROOT / "index.js"
 STYLE_PATH = DIST_ROOT / "style.css"
 
@@ -46,7 +52,7 @@ def build_bundle_text() -> str:
 
 
 def build_style_text() -> str:
-    return STYLE_SOURCE.read_text(encoding="utf-8").rstrip() + "\n"
+    return "\n\n".join(path.read_text(encoding="utf-8").rstrip() for path in STYLE_SOURCES) + "\n"
 
 
 def write_assets() -> None:

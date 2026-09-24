@@ -1,180 +1,187 @@
 feature.presentationStateView = (function () {
   const e = SDK.React.createElement;
   const primitives = feature.presentationPrimitives;
-  const sectionCard = primitives.sectionCard;
-  const statusBadge = primitives.statusBadge;
-  const metric = primitives.metric;
-  const chips = primitives.chips;
 
-  function moodCore(state) {
-    const valence = feature.domain.percent(state.affect.valence, -1, 1);
-    const arousal = feature.domain.percent(state.affect.arousal, 0, 1);
-    const frustration = feature.domain.percent(state.affect.frustration, 0, 1);
+  function panel(title, content, className) {
     return e(
-      "div",
-      {
-        className: "ha-core",
-        style: {
-          "--ha-valence": valence + "%",
-          "--ha-arousal": arousal + "%",
-          "--ha-frustration": frustration + "%",
-        },
-      },
-      e("div", { className: "ha-core__halo" }),
-      e(
-        "div",
-        { className: "ha-core__body" },
-        e("span", { className: "ha-core__label" }, "Current mood"),
-        e("strong", null, feature.domain.label(state.mood)),
-        e(
-          "span",
-          { className: "ha-core__posture" },
-          e("span", null, "Last response posture"),
-          e("strong", null, feature.domain.label(state.posture))
-        )
-      )
+      "section",
+      { className: "ha-panel " + (className || "") },
+      e("h2", null, title),
+      content
     );
   }
 
-  function relationshipCard(relation) {
+  function stateFacts(state) {
+    const facts = [
+      ["Atmosphere", feature.domain.formatNumber(state.atmosphere)],
+      [
+        "Expression drive",
+        state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive),
+      ],
+      ["Model", "v" + state.modelVersion],
+      ["Migration", state.migrationRequired ? "Required" : "Current"],
+    ];
     return e(
-      "article",
-      { className: "ha-relationship", key: relation.id },
+      "dl",
+      { className: "ha-fact-list" },
+      facts.map(function (fact) {
+        return e(
+          "div",
+          { className: "ha-fact", key: fact[0] },
+          e("dt", null, fact[0]),
+          e("dd", null, fact[1])
+        );
+      })
+    );
+  }
+
+  function conflictList(conflicts) {
+    if (!conflicts.length) return e("p", { className: "ha-muted" }, "No open conflicts.");
+    return e(
+      "ul",
+      { className: "ha-compact-list" },
+      conflicts.map(function (conflict) {
+        return e(
+          "li",
+          { key: conflict.id },
+          e("strong", { title: conflict.id }, conflict.id),
+          e("span", null, feature.domain.label(conflict.status)),
+          e("span", null, "Heat " + feature.domain.formatNumber(conflict.heat))
+        );
+      })
+    );
+  }
+
+  function relationIds(state) {
+    return state.relationships.map(function (relation) {
+      return relation.id;
+    });
+  }
+
+  function relationshipDetail(relation) {
+    if (!relation) return e("p", { className: "ha-muted" }, "No participant relationships have been recorded.");
+    return e(
+      "div",
+      { className: "ha-relationship-detail" },
       e(
         "div",
-        { className: "ha-relationship__top" },
+        { className: "ha-relationship-detail__heading" },
         e("strong", { title: relation.id }, relation.id),
-        relation.tension >= 0.5
-          ? statusBadge("Tense", "warning")
-          : statusBadge("Observed", "muted")
+        primitives.statusBadge(
+          relation.tension >= 0.5 ? "Tense" : "Observed",
+          relation.tension >= 0.5 ? "warning" : "muted"
+        )
       ),
       e(
         "div",
-        { className: "ha-mini-grid" },
-        metric("Trust", relation.trust, -1, 1, "positive"),
-        metric("Affinity", relation.affinity, -1, 1, "positive"),
-        metric("Respect", relation.respect, -1, 1, "accent"),
-        metric("Irritation", relation.irritation, 0, 1, "danger"),
-        metric("Tension", relation.tension, 0, 1, "warning")
+        { className: "ha-relationship-metrics" },
+        primitives.metric("Trust", relation.trust, -1, 1, "positive"),
+        primitives.metric("Affinity", relation.affinity, -1, 1, "positive"),
+        primitives.metric("Respect", relation.respect, -1, 1, "accent"),
+        primitives.metric("Irritation", relation.irritation, 0, 1, "danger"),
+        primitives.metric("Tension", relation.tension, 0, 1, "warning")
       )
     );
   }
 
-  function renderState(state, hasError, tuningControls) {
-    const updated = primitives.updatedLabel(state.updatedAt);
-    const expression =
-      state.expressionDrive === null ? "—" : feature.domain.formatNumber(state.expressionDrive);
+  function RelationshipsSummary(props) {
+    const state = props.state;
+    const ids = relationIds(state);
+    const targetKey = state.profileId + "\u0000" + state.sessionId;
+    const relationshipKey = JSON.stringify(ids);
+    const initialId = ids.length ? ids[0] : "";
+    const selectionPair = SDK.hooks.useState({ targetKey: targetKey, participantId: initialId });
+    const selection = selectionPair[0];
+    const setSelection = selectionPair[1];
+    const storedId = selection.targetKey === targetKey ? selection.participantId : initialId;
+    const selectedId = ids.indexOf(storedId) >= 0 ? storedId : initialId;
+    const relation = state.relationships.find(function (item) {
+      return item.id === selectedId;
+    });
 
+    SDK.hooks.useEffect(
+      function () {
+        setSelection({ targetKey: targetKey, participantId: selectedId });
+      },
+      [targetKey, relationshipKey]
+    );
+
+    return panel(
+      "Relationships",
+      ids.length
+        ? e(
+            "div",
+            { className: "ha-relationships-summary" },
+            e(
+              "label",
+              { className: "ha-relationship-picker", htmlFor: "ha-state-participant-select" },
+              e("span", null, ids.length + " participant" + (ids.length === 1 ? "" : "s")),
+              e(
+                "select",
+                {
+                  id: "ha-state-participant-select",
+                  value: selectedId,
+                  onChange: function (event) {
+                    setSelection({ targetKey: targetKey, participantId: event.target.value });
+                  },
+                },
+                state.relationships.map(function (item) {
+                  return e("option", { value: item.id, key: item.id }, item.id);
+                })
+              )
+            ),
+            relationshipDetail(relation)
+          )
+        : relationshipDetail(null),
+      "ha-panel--relationships"
+    );
+  }
+
+  function tuningSummary(state) {
+    if (!state.tuning.length) return e("p", { className: "ha-muted" }, "No session overrides are active.");
+    return e(
+      "div",
+      { className: "ha-tuning-list" },
+      state.tuning.map(function (entry) {
+        return e(
+          "span",
+          { className: "ha-chip ha-chip--muted", key: entry[0] },
+          feature.domain.label(entry[0]) + " " + feature.domain.formatNumber(entry[1])
+        );
+      })
+    );
+  }
+
+  function StateView(props) {
+    const state = props.state;
     return e(
       "div",
       { className: "ha-state-view" },
-      hasError
+      props.hasError
         ? e(
             "div",
             { className: "ha-notice", role: "status" },
             "Live refresh is temporarily unavailable. Showing the last valid snapshot."
           )
         : null,
-      tuningControls,
+      panel("Session context", stateFacts(state), "ha-panel--facts"),
       e(
-        "header",
-        { className: "ha-hero" },
-        e(
-          "div",
-          { className: "ha-hero__copy" },
-          e("div", { className: "ha-kicker" }, "Hermes Affect / live state"),
-          e("h1", null, state.profileId),
-          e(
-            "p",
-            null,
-            "A local, session-scoped view of emotional posture and relationship dynamics."
-          ),
-          e(
-            "div",
-            { className: "ha-hero__meta" },
-            primitives.statusBadge(hasError ? "Stale" : "Live", hasError ? "warning" : "success"),
-            e("span", null, "Updated " + updated),
-            e("span", null, "Revision " + state.revision),
-            e("span", { title: state.sessionId }, "Session " + state.sessionId)
-          )
-        ),
-        moodCore(state)
-      ),
-      e(
-        "section",
-        { className: "ha-grid ha-grid--overview" },
-        sectionCard(
-          "Affect balance",
-          "Internal signal",
-          e(
-            "div",
-            { className: "ha-metrics" },
-            metric("Valence", state.affect.valence, -1, 1, "positive"),
-            metric("Arousal", state.affect.arousal, 0, 1, "accent"),
-            metric("Frustration", state.affect.frustration, 0, 1, "warning"),
-            metric("Offended", state.affect.offended, 0, 1, "danger")
-          )
-        ),
-        sectionCard(
-          "Expression",
-          "Behavioral projection",
-          e(
-            "div",
-            { className: "ha-stat-grid" },
-            e("div", { className: "ha-stat" }, e("span", null, "Drive"), e("strong", null, expression)),
-            e(
-              "div",
-              { className: "ha-stat" },
-              e("span", null, "Atmosphere"),
-              e("strong", null, feature.domain.formatNumber(state.atmosphere))
-            ),
-            e("div", { className: "ha-stat" }, e("span", null, "Model"), e("strong", null, "v" + state.modelVersion)),
-            e(
-              "div",
-              { className: "ha-stat" },
-              e("span", null, "Migration"),
-              e("strong", null, state.migrationRequired ? "Required" : "Current")
-            )
-          )
-        )
-      ),
-      e(
-        "section",
-        { className: "ha-grid ha-grid--context" },
-        sectionCard(
+        "div",
+        { className: "ha-state-grid" },
+        panel(
           "Active sensitivities",
-          "Current turn",
-          chips(state.sensitivities, "No active sensitivities.", "accent")
+          primitives.chips(state.sensitivities, "No active sensitivities.", "accent")
         ),
-        sectionCard("Open conflicts", "Relationship heat", chips(state.conflicts, "No open conflicts.", "warning"))
+        panel("Open conflicts", conflictList(state.conflicts))
       ),
-      sectionCard(
-        "Relationships",
-        state.relationships.length + " current participant" + (state.relationships.length === 1 ? "" : "s"),
-        state.relationships.length
-          ? e("div", { className: "ha-relationships" }, state.relationships.map(relationshipCard))
-          : e("p", { className: "ha-muted" }, "No participant relationships have been recorded in this session."),
-        "ha-card--relationships"
-      ),
-      state.tuning.length
-        ? sectionCard(
-            "Session tuning",
-            "Temporary overrides",
-            e(
-              "div",
-              { className: "ha-chip-row" },
-              state.tuning.map(function (entry) {
-                return e(
-                  "span",
-                  { className: "ha-chip ha-chip--muted", key: entry[0] },
-                  feature.domain.label(entry[0]) + " " + entry[1].toFixed(2)
-                );
-              })
-            )
-          )
-        : null
+      e(
+        "div",
+        { className: "ha-state-grid ha-state-grid--lower" },
+        e(RelationshipsSummary, { state: state }),
+        panel("Active tuning", tuningSummary(state))
+      )
     );
   }
 
-  return { renderState: renderState };
+  return { StateView: StateView, RelationshipsSummary: RelationshipsSummary };
 })();

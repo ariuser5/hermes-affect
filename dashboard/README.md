@@ -41,9 +41,24 @@ identity remains visible beside the selector. Exact selections remain pinned
 while polling; if retention removes one, the page reports it as unavailable
 instead of switching silently.
 
-The state view shows mood, posture, freshness, expression drive, perceived
-atmosphere, affect values, relationships, active sensitivities, open conflicts,
-and temporary tuning overrides.
+The page keeps a compact summary visible below the session bar: mood, last
+response posture, update time, revision, and small meters for valence, arousal,
+frustration, and offended. The **State** tab is the default and contains
+atmosphere, expression drive, model/migration status, sensitivities, conflicts,
+relationships, and active tuning without repeating the summary meters.
+Relationships use a participant selector and show details for one participant
+at a time.
+
+When dashboard controls are enabled and the selected state is model v2, an
+**Adjust** tab provides Affect, Atmosphere, Relationship, and Expression
+groups. Each editable field has a synchronized slider and numeric input plus
+an explicit Apply action; edits are never saved while dragging. Expression
+gain shows its configured and effective values and whether a session override
+is active, with Apply and Restore configured value actions. Drafts persist
+while switching tabs/groups and during routine polls, but are reset when the
+target changes or a revision conflict requires review. Selecting another
+session returns the page to State first. Controls remain non-sticky and adapt
+to narrow screens.
 
 When dashboard controls are enabled, “Manual state controls” provides sliders,
 numeric inputs, and explicit Apply buttons for valence, arousal, frustration,
@@ -112,6 +127,12 @@ Rebuild and verify the browser assets with:
 python -m dashboard.tools.build_dashboard
 python -m dashboard.tools.build_dashboard --check
 node dashboard/frontend/tests/domain.test.js
+node dashboard/frontend/tests/controller.test.js
+node dashboard/frontend/tests/dashboard_presentation.test.js
+node dashboard/frontend/tests/session_navigator.test.js
+node dashboard/frontend/tests/tuning.test.js
+node dashboard/frontend/tests/tuning_presentation.test.js
+node dashboard/frontend/tests/tuning_restore.test.js
 node dashboard/frontend/tests/manual_state_controller.test.js
 node dashboard/frontend/tests/manual_state_presentation.test.js
 node dashboard/frontend/tests/poll_refresh_queue.test.js
@@ -125,8 +146,9 @@ python -m unittest discover -s dashboard/tests -t .
 ```
 
 The build is dependency-free: it concatenates the ordered browser modules into
-one inspectable IIFE and copies the reviewed CSS. React and common UI components
-come from Hermes' dashboard SDK at runtime.
+one inspectable IIFE and combines the focused layout, controls, and responsive
+stylesheets into the generated CSS. React and common UI components come from
+Hermes' dashboard SDK at runtime.
 
 ## Deployment scope
 
